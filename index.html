@@ -264,6 +264,34 @@
   .help-text{font-size:11.5px;color:var(--muted);line-height:1.45;margin:10px 0 0;}
   .security-list{margin:0;padding-left:19px;color:var(--muted);font-size:12px;line-height:1.6;}
   .security-list li{margin-bottom:5px;}
+
+  .v6-filter-card{padding-bottom:10px;}
+  .filter-title{font-weight:700;font-size:15px;margin-bottom:8px;}
+  .filter-label{font-size:11.5px;color:var(--muted);margin:7px 0 5px;}
+  .v6-filters{display:flex;gap:6px;overflow-x:auto;padding-bottom:3px;}
+  .filter-chip{flex:0 0 auto;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:7px 11px;border-radius:20px;font-size:11.5px;font-family:inherit;}
+  .filter-chip.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+  .v6-stats .stat-box{min-width:0;}
+  .kpi-grid,.aging-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .kpi-grid>div,.aging-grid>div{background:var(--bg);border-radius:10px;padding:11px;text-align:center;}
+  .kpi-grid b,.aging-grid b{display:block;font-size:22px;}
+  .kpi-grid span,.aging-grid span{display:block;font-size:11px;color:var(--muted);margin-top:2px;}
+  .metric-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .metric-row:last-child{border-bottom:0;}
+  .muted-small{font-size:10.8px;color:var(--muted);margin-top:3px;line-height:1.35;}
+  .week-row{display:grid;grid-template-columns:58px 1fr 28px 45px;gap:6px;align-items:center;margin:8px 0;font-size:10.5px;}
+  .week-label{color:var(--muted);}
+  .week-track{height:9px;background:var(--bg);border-radius:8px;overflow:hidden;}
+  .week-fill{height:100%;background:var(--primary);border-radius:8px;min-width:3px;}
+  .week-num{font-weight:700;text-align:right;}
+  .week-imm{color:var(--red);text-align:right;}
+  .legend-small{font-size:10.5px;color:var(--muted);margin-top:8px;}
+  .quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .quick-grid>div{background:var(--bg);padding:11px;border-radius:10px;display:flex;flex-direction:column;gap:5px;}
+  .quick-grid span{font-size:11px;color:var(--muted);}
+  .quick-grid b{font-size:20px;}
+  @media (max-width:380px){.week-row{grid-template-columns:52px 1fr 24px 40px}.stat-box{padding:11px}.stat-box .num{font-size:23px;}}
+
 </style>
 </head>
 <body>
@@ -335,14 +363,14 @@ const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
 let entries = [];
 let storageOk = true;
 let lastSavedAt = null;
-let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null };
+let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null, dashboardSite: "Tous", dashboardStatus: "Tous" };
 
 // V4: append-only local history. Every submission gets its own record and is never overwritten.
 // The old key is retained so existing pilot data remains available after the upgrade.
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 5;
+const STORAGE_VERSION = 6;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 /* ---------- Storage helpers ---------- */
@@ -482,53 +510,127 @@ function renderTabbar(){
   });
 }
 
+function isoWeekFromDate(date){
+  const d = new Date(date);
+  if(Number.isNaN(d.getTime())) return "";
+  const utc = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = (utc.getUTCDay() + 6) % 7;
+  utc.setUTCDate(utc.getUTCDate() - day + 3);
+  const firstThursday = new Date(Date.UTC(utc.getUTCFullYear(),0,4));
+  const week = 1 + Math.round(((utc - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay()+6)%7)) / 7);
+  return `${utc.getUTCFullYear()}-W${String(week).padStart(2,"0")}`;
+}
+function daysSince(iso){
+  const t = new Date(iso).getTime();
+  if(!Number.isFinite(t)) return null;
+  return Math.max(0, Math.floor((Date.now()-t)/86400000));
+}
+function dashboardLatest(){
+  let rows = latestPerWagon(entries);
+  if(state.dashboardSite !== "Tous") rows = rows.filter(e => e.site === state.dashboardSite);
+  if(state.dashboardStatus !== "Tous") rows = rows.filter(e => e.status === state.dashboardStatus);
+  return rows;
+}
 function viewDashboard(){
   if(!storageOk){
     return bannerHTML() + `<div class="empty"><div class="big">⚠️</div><p>Impossible de charger les données pour le moment.</p></div>`;
   }
-  const latest = latestPerWagon(entries);
-  if(latest.length === 0){
+  const allLatest = latestPerWagon(entries);
+  if(allLatest.length === 0){
     return `<div class="empty"><div class="big">🚃</div><p>Aucune donnée pour l'instant.<br>Ajoutez une saisie pour commencer le suivi.</p></div>`;
   }
+  const latest = dashboardLatest();
   const counts = {}; STATUSES.forEach(s => counts[s]=0);
   latest.forEach(e => { if(counts[e.status]!==undefined) counts[e.status]++; });
-  const isoles = latest.filter(e => e.isolation && e.isolation !== "Aucun").length;
+  const activeCount = activeEntries().length;
+  const currentWeek = isoWeekDefault();
+  const weekEntries = activeEntries().filter(e => e.week === currentWeek);
+  const newImmobilisations = weekEntries.filter(e => e.status === "Immobilisé").length;
+  const released = weekEntries.filter(e => e.status === "Disponible").length;
+  const reformes = weekEntries.filter(e => e.status === "Réformé").length;
+  const isoled = latest.filter(e => e.isolation && e.isolation !== "Aucun").length;
+
+  const aged = [7,15,30].map(n => latest.filter(e => ["Immobilisé","En réparation","En attente"].includes(e.status) && (daysSince(e.created_at) ?? -1) >= n).length);
+  const rate = allLatest.length ? Math.round((allLatest.filter(e=>e.status==="Disponible").length / allLatest.length)*100) : 0;
 
   const statBoxes = `
-    <div class="stat-grid">
+    <div class="stat-grid v6-stats">
       <div class="stat-box dispo"><div class="num">${counts["Disponible"]}</div><div class="lab">Disponibles</div></div>
       <div class="stat-box immob"><div class="num">${counts["Immobilisé"]}</div><div class="lab">Immobilisés</div></div>
       <div class="stat-box repar"><div class="num">${counts["En réparation"]}</div><div class="lab">En réparation</div></div>
       <div class="stat-box attente"><div class="num">${counts["En attente"]}</div><div class="lab">En attente</div></div>
       <div class="stat-box reforme"><div class="num">${counts["Réformé"]}</div><div class="lab">Réformés</div></div>
+      <div class="stat-box"><div class="num">${latest.length}</div><div class="lab">Wagons suivis</div></div>
     </div>`;
 
+  const siteOptions = ["Tous", ...SITES].map(s => `<button class="filter-chip ${state.dashboardSite===s?'active':''}" data-dash-site="${esc(s)}">${esc(s)}</button>`).join("");
+  const statusOptions = ["Tous", ...STATUSES].map(s => `<button class="filter-chip ${state.dashboardStatus===s?'active':''}" data-dash-status="${esc(s)}">${esc(s)}</button>`).join("");
+
   const bySite = SITES.map(site => {
-    const rows = latest.filter(e => e.site === site);
-    const total = rows.length;
-    const segs = STATUSES.map(s => {
-      const n = rows.filter(r => r.status === s).length;
-      const pct = total ? (n/total*100) : 0;
-      return pct > 0 ? `<div class="seg" style="width:${pct}%;background:${STATUS_COLOR[s].c}"></div>` : "";
-    }).join("");
-    return `
-      <div class="site-bar-row">
-        <div class="head"><span>${esc(site)}</span><span style="color:var(--muted)">${total} wagon${total>1?"s":""}</span></div>
-        <div class="track">${segs || ""}</div>
-      </div>`;
+    const rows = allLatest.filter(e => e.site === site);
+    const imm = rows.filter(e => e.status === "Immobilisé").length;
+    const rep = rows.filter(e => e.status === "En réparation").length;
+    const reform = rows.filter(e => e.status === "Réformé").length;
+    return `<div class="metric-row"><div><b>${esc(site)}</b><div class="muted-small">${rows.length} wagon${rows.length>1?'s':''} · ${imm} immobilisé${imm>1?'s':''} · ${rep} en réparation · ${reform} réformé${reform>1?'s':''}</div></div><strong>${rows.length}</strong></div>`;
   }).join("");
 
+  const currentProblem = latest.filter(e => ["Immobilisé","En réparation","En attente"].includes(e.status));
+  const motifMap = new Map();
+  currentProblem.forEach(e => { const m=e.motif || "Aucune"; motifMap.set(m,(motifMap.get(m)||0)+1); });
+  const topMotifs = [...motifMap.entries()].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0])).slice(0,5);
+  const motifHtml = topMotifs.length ? topMotifs.map(([m,n])=>`<div class="metric-row"><span>${esc(m)}</span><strong>${n}</strong></div>`).join("") : `<div class="muted-small">Aucune anomalie/motif sur les situations en cours.</div>`;
+
+  const weeks=[];
+  const now=new Date();
+  for(let i=5;i>=0;i--){ const d=new Date(now); d.setDate(d.getDate()-i*7); const w=isoWeekFromDate(d); weeks.push(w); }
+  const weekly = weeks.map(w=>({w, total:activeEntries().filter(e=>e.week===w).length, imm:activeEntries().filter(e=>e.week===w && e.status==="Immobilisé").length}));
+  const maxWeek=Math.max(1,...weekly.map(x=>x.total));
+  const weeklyHtml=weekly.map(x=>`<div class="week-row"><div class="week-label">${esc(x.w)}</div><div class="week-track"><div class="week-fill" style="width:${Math.max(4,x.total/maxWeek*100)}%"></div></div><div class="week-num">${x.total}</div><div class="week-imm">${x.imm} imm.</div></div>`).join("");
+
   return `
+    <div class="card v6-filter-card">
+      <div class="filter-title">Filtres du pilotage</div>
+      <div class="filter-label">Site</div><div class="v6-filters">${siteOptions}</div>
+      <div class="filter-label">Situation</div><div class="v6-filters">${statusOptions}</div>
+      <div class="muted-small">Affichage : ${latest.length} wagon${latest.length>1?'s':''} · ${activeCount} saisie${activeCount>1?'s':''} active${activeCount>1?'s':''} au total</div>
+    </div>
     ${statBoxes}
+    <div class="card">
+      <h2 class="section-title">Indicateurs de la semaine · ${esc(currentWeek)}</h2>
+      <div class="kpi-grid">
+        <div><b>${weekEntries.length}</b><span>Saisies</span></div>
+        <div><b>${newImmobilisations}</b><span>Nouveaux immobilisés</span></div>
+        <div><b>${released}</b><span>Disponibles enregistrés</span></div>
+        <div><b>${reformes}</b><span>Réformes enregistrées</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Ancienneté des situations en cours</h2>
+      <div class="aging-grid">
+        <div><b>${aged[0]}</b><span>≥ 7 jours</span></div>
+        <div><b>${aged[1]}</b><span>≥ 15 jours</span></div>
+        <div><b>${aged[2]}</b><span>≥ 30 jours</span></div>
+      </div>
+      <p class="help-text">Calcul basé sur la date de la dernière saisie active. Ce sont des seuils de pilotage, pas des seuils réglementaires.</p>
+    </div>
     <div class="card">
       <h2 class="section-title">Répartition par site</h2>
       ${bySite}
     </div>
     <div class="card">
-      <h2 class="section-title">Wagons sous code d'isolation</h2>
-      <div class="stat-box" style="border:none;padding:0;">
-        <div class="num" style="color:var(--amber)">${isoles}</div>
-        <div class="lab">sur ${latest.length} wagons suivis</div>
+      <h2 class="section-title">Top motifs des situations en cours</h2>
+      ${motifHtml}
+    </div>
+    <div class="card">
+      <h2 class="section-title">Activité des 6 dernières semaines</h2>
+      ${weeklyHtml}
+      <div class="legend-small">Nombre de saisies · « imm. » = saisies avec situation Immobilisé</div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Lecture rapide</h2>
+      <div class="quick-grid">
+        <div><span>Taux de wagons actuellement disponibles</span><b>${rate}%</b></div>
+        <div><span>Wagons sous étiquette mod.</span><b>${isoled}</b></div>
       </div>
     </div>
   `;
@@ -739,6 +841,10 @@ function downloadCSV(content, filename){
 
 /* ---------- Event handlers ---------- */
 function attachViewHandlers(){
+  if(state.view === "dashboard"){
+    document.querySelectorAll("[data-dash-site]").forEach(btn => btn.addEventListener("click", () => { state.dashboardSite = btn.dataset.dashSite; render(); }));
+    document.querySelectorAll("[data-dash-status]").forEach(btn => btn.addEventListener("click", () => { state.dashboardStatus = btn.dataset.dashStatus; render(); }));
+  }
   if(state.view === "saisie"){
     const form = document.getElementById("saisieForm");
     const wagonInput = form.querySelector('input[name="wagon"]');
