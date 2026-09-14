@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wagons Fret ONCF</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wagons Fret ONCF">
+<meta name="theme-color" content="#2C4A63">
+<meta name="description" content="Suivi des wagons charbon ONCF sur les sites de Beni Ansar, Selouane et Hassi Blal.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-512.png">
+<style>
+  :root{
+    --bg:#EEF1F3;
+    --surface:#FFFFFF;
+    --border:#D7DEE3;
+    --text:#16232E;
+    --muted:#5B6B7A;
+    --primary:#2C4A63;
+    --primary-light:#3E647F;
+    --primary-bg:#E4ECF1;
+    --amber:#B36B00;
+    --amber-bg:#FBEBD2;
+    --green:#2E6B4C;
+    --green-bg:#DEEEE4;
+    --red:#A6362B;
+    --red-bg:#F7E1DF;
+    --radius:14px;
+    --radius-sm:8px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  .app{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    max-width:520px;
+    margin:0 auto;
+    width:100%;
+    background:var(--bg);
+  }
+  header.top{
+    flex:0 0 auto;
+    background:var(--primary);
+    color:#fff;
+    padding:16px 18px 14px;
+    position:sticky; top:0; z-index:5;
+  }
+  header.top h1{
+    font-size:19px;
+    margin:0 0 2px;
+    font-weight:650;
+    letter-spacing:-0.01em;
+  }
+  header.top p{
+    margin:0;
+    font-size:12.5px;
+    color:#C7D5DE;
+  }
+  .chips-row{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+    overflow-x:auto;
+    padding-bottom:2px;
+  }
+  .chip-stat{
+    flex:1 0 auto;
+    background:rgba(255,255,255,0.1);
+    border-radius:var(--radius-sm);
+    padding:7px 10px;
+    min-width:78px;
+  }
+  .chip-stat .n{ font-size:17px; font-weight:700; display:block; line-height:1.1; }
+  .chip-stat .l{ font-size:10.5px; color:#C7D5DE; display:block; margin-top:1px; }
+
+  main{
+    flex:1 1 auto;
+    overflow-y:auto;
+    padding:16px 16px 90px;
+    -webkit-overflow-scrolling:touch;
+  }
+  nav.tabbar{
+    flex:0 0 auto;
+    display:flex;
+    background:var(--surface);
+    border-top:1px solid var(--border);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    position:sticky; bottom:0; z-index:5;
+  }
+  nav.tabbar button{
+    flex:1;
+    border:none;
+    background:none;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    padding:6px 2px;
+    font-size:11px;
+    color:var(--muted);
+    font-family:inherit;
+    border-radius:var(--radius-sm);
+  }
+  nav.tabbar button.active{ color:var(--primary); background:var(--primary-bg); }
+  nav.tabbar button svg{ width:20px; height:20px; }
+
+  h2.section-title{ font-size:15.5px; font-weight:650; margin:0 0 10px; }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:14px;
+    margin-bottom:12px;
+  }
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .stat-box{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+  .stat-box .num{ font-size:26px; font-weight:700; }
+  .stat-box .lab{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .stat-box.dispo .num{ color:var(--green); }
+  .stat-box.immob .num{ color:var(--red); }
+  .stat-box.repar .num{ color:var(--amber); }
+  .stat-box.attente .num{ color:var(--primary); }
+
+  .site-bar-row{ margin-bottom:10px; }
+  .site-bar-row .head{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+  .site-bar-row .track{ height:8px; background:var(--border); border-radius:5px; overflow:hidden; display:flex; }
+  .site-bar-row .seg{ height:100%; }
+
+  label{ display:block; font-size:12.5px; color:var(--muted); margin:14px 0 6px; font-weight:600; }
+  label:first-child{ margin-top:0; }
+  input, select, textarea{
+    width:100%;
+    padding:11px 12px;
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    font-size:15px;
+    font-family:inherit;
+    background:#fff;
+    color:var(--text);
+  }
+  textarea{ min-height:70px; resize:vertical; }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--primary-light); outline-offset:1px; }
+  .field-error{ color:var(--red); font-size:12px; margin-top:4px; display:none; }
+  .field-error.show{ display:block; }
+
+  .btn{
+    display:block;
+    width:100%;
+    text-align:center;
+    background:var(--primary);
+    color:#fff;
+    border:none;
+    padding:13px;
+    border-radius:var(--radius-sm);
+    font-size:15px;
+    font-weight:650;
+    margin-top:18px;
+    font-family:inherit;
+  }
+  .btn:active{ background:var(--primary-light); }
+  .btn.secondary{ background:var(--surface); color:var(--primary); border:1px solid var(--primary); }
+  .btn.ghost{ background:none; color:var(--red); border:1px solid var(--red); }
+
+  .search-row{ display:flex; gap:8px; margin-bottom:10px; }
+  .search-row input{ flex:1; }
+  .site-filter{ display:flex; gap:6px; overflow-x:auto; margin-bottom:14px; padding-bottom:2px; }
+  .site-filter button{
+    flex:0 0 auto;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--text);
+    padding:7px 12px;
+    border-radius:20px;
+    font-size:12.5px;
+    font-family:inherit;
+  }
+  .site-filter button.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  .wagon-card{
+    display:flex;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    margin-bottom:10px;
+    overflow:hidden;
+  }
+  .wagon-card .bar{ width:5px; flex:0 0 auto; }
+  .wagon-card .body{ padding:11px 13px; flex:1; min-width:0; }
+  .wagon-card .row1{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .wagon-card .num{ font-size:16px; font-weight:700; letter-spacing:0.01em; }
+  .badge{ font-size:11.5px; font-weight:650; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .meta-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .meta-tag{ font-size:11.5px; color:var(--muted); background:var(--bg); padding:2px 8px; border-radius:6px; }
+  .card-obs{ font-size:13px; color:var(--text); margin-top:7px; line-height:1.35; }
+  .card-foot{ font-size:11px; color:var(--muted); margin-top:7px; }
+
+  .empty{ text-align:center; padding:40px 16px; color:var(--muted); }
+  .empty .big{ font-size:34px; margin-bottom:8px; }
+  .empty p{ font-size:13.5px; line-height:1.5; margin:4px 0 0; }
+
+  .toast{
+    position:fixed; left:50%; bottom:90px; transform:translateX(-50%);
+    background:var(--text); color:#fff; padding:10px 18px; border-radius:24px;
+    font-size:13.5px; z-index:50; opacity:0; transition:opacity .2s;
+    pointer-events:none; white-space:nowrap;
+  }
+  .toast.show{ opacity:1; }
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(10,15,20,0.5);
+    display:flex; align-items:flex-end; z-index:40;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .modal-sheet{
+    background:var(--bg); width:100%; max-height:82vh; overflow-y:auto;
+    border-radius:18px 18px 0 0; padding:16px 16px calc(20px + env(safe-area-inset-bottom));
+    max-width:520px; margin:0 auto;
+  }
+  .modal-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .modal-head h3{ margin:0; font-size:16.5px; }
+  .modal-close{ border:none; background:none; font-size:22px; color:var(--muted); line-height:1; padding:4px; }
+  .hist-item{ border-left:3px solid var(--border); padding:2px 0 12px 12px; margin-bottom:2px; position:relative; }
+  .hist-item:last-child{ border-color:transparent; }
+  .hist-item .dot{ position:absolute; left:-6px; top:4px; width:9px; height:9px; border-radius:50%; }
+  .hist-item .when{ font-size:11.5px; color:var(--muted); }
+  .hist-item .st{ font-size:13.5px; font-weight:650; margin:2px 0; }
+  .hist-item .det{ font-size:12.5px; color:var(--text); }
+  .hist-del{ font-size:11.5px; color:var(--red); background:none; border:none; padding:4px 0; font-family:inherit; }
+
+  .banner{ background:var(--red-bg); color:var(--red); border-radius:var(--radius-sm); padding:10px 12px; font-size:13px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .banner button{ border:none; background:var(--red); color:#fff; border-radius:6px; padding:5px 10px; font-size:12px; font-family:inherit; }
+  .loading-row{ text-align:center; padding:30px 0; color:var(--muted); font-size:13.5px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Wagons Fret ONCF</h1>
+    <p>Beni Ansar, Selouane et Hassi Blal</p>
+    <div class="chips-row" id="headerChips"></div>
+  </header>
+
+  <main id="main"></main>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-view="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      Tableau
+    </button>
+    <button data-view="saisie">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      Saisie
+    </button>
+    <button data-view="situation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      Situation
+    </button>
+    <button data-view="export">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+      Export
+    </button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal-sheet" id="modalSheet"></div>
+</div>
+
+<script>
+/* ---------- Reference data ---------- */
+const SITES = ["Beni Ansar (Gare)","Beni Ansar (Port)","Selouane","Hassi Blal"];
+const SERIES = ["Tads","Fads","Uads","Fads SCIF","Fads Barytine","Autre"];
+// Auto-fill mapping from the first 4 digits of a wagon number to its série,
+// per the ONCF Parc du Matériel (Annexe 1, Contrat PFL-PMM N° 12/2021).
+const SERIE_BY_PREFIX = {
+  "5838": "Tads", "5839": "Tads",             // Tads charbon/barytine
+  "6970": "Fads", "6971": "Fads",             // Fads charbon
+  "6960": "Fads Barytine",                    // Fadsf barytine
+  "9310": "Fads SCIF",                        // Fads charbon SCIF (93105)
+  "9313": "Uads", "9314": "Uads", "9315": "Uads",   // Uads charbon/calcaire
+  "9325": "Uads", "9326": "Uads", "9328": "Uads", "9329": "Uads" // Uads charbon
+};
+function serieFromWagon(wagon){
+  if(!wagon || wagon.length < 4) return null;
+  return SERIE_BY_PREFIX[wagon.slice(0, 4)] || null;
+}
+const STATUSES = ["Disponible","Immobilisé","En réparation","En attente"];
+const STATUS_COLOR = {
+  "Disponible":   { c: "var(--green)",  bg:"var(--green-bg)" },
+  "Immobilisé":   { c: "var(--red)",    bg:"var(--red-bg)" },
+  "En réparation":{ c: "var(--amber)",  bg:"var(--amber-bg)" },
+  "En attente":   { c: "var(--primary)",bg:"var(--primary-bg)" }
+};
+const MOTIFS = ["Aucune","VG","RA","RLCB","RLB","ILD","PDR","Frein","Caisse","Trappe","Autre"];
+const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
+
+/* ---------- State ---------- */
+let entries = [];
+let storageOk = true;
+let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null };
+
+const STORAGE_KEY = "wagons-charbon-entries";
+
+/* ---------- Storage helpers ---------- */
+async function loadEntries(){
+  // Standalone version: data lives in this browser/device only (localStorage),
+  // not shared with anyone else and not tied to Claude.
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    entries = raw ? JSON.parse(raw) : [];
+  }catch(e){
+    entries = [];
+  }
+  storageOk = true;
+}
+async function saveEntries(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    storageOk = true;
+    return true;
+  }catch(e){
+    storageOk = false;
+    return false;
+  }
+}
+
+/* ---------- Utilities ---------- */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function isoWeekDefault(){
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  const weekNum = 1 + Math.round(((d - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+}
+function fmtDateTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR", { day:"2-digit", month:"2-digit", year:"numeric" }) + " " +
+         d.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
+}
+function esc(s){
+  return String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ---------- Derived data ---------- */
+function latestPerWagon(list){
+  const map = new Map();
+  for(const e of list){ map.set(e.wagon, e); } // last occurrence wins (array is append-ordered)
+  return Array.from(map.values());
+}
+function filteredSituation(){
+  let latest = latestPerWagon(entries);
+  if(state.filterSite !== "Tous") latest = latest.filter(e => e.site === state.filterSite);
+  if(state.search) latest = latest.filter(e => e.wagon.includes(state.search.trim()));
+  latest.sort((a,b) => a.site.localeCompare(b.site) || a.wagon.localeCompare(b.wagon));
+  return latest;
+}
+
+/* ---------- Rendering ---------- */
+function render(){
+  renderHeaderChips();
+  renderTabbar();
+  const main = document.getElementById("main");
+  if(state.view === "dashboard") main.innerHTML = viewDashboard();
+  else if(state.view === "saisie") main.innerHTML = viewSaisie();
+  else if(state.view === "situation") main.innerHTML = viewSituation();
+  else if(state.view === "export") main.innerHTML = viewExport();
+  attachViewHandlers();
+}
+
+function renderHeaderChips(){
+  const latest = latestPerWagon(entries);
+  const counts = {};
+  STATUSES.forEach(s => counts[s] = 0);
+  latest.forEach(e => { if(counts[e.status] !== undefined) counts[e.status]++; });
+  const el = document.getElementById("headerChips");
+  el.innerHTML = STATUSES.map(s => `
+    <div class="chip-stat">
+      <span class="n">${counts[s]}</span>
+      <span class="l">${esc(s)}</span>
+    </div>`).join("");
+}
+
+function renderTabbar(){
+  document.querySelectorAll("#tabbar button").forEach(b => {
+    b.classList.toggle("active", b.dataset.view === state.view);
+  });
+}
+
+function viewDashboard(){
+  if(!storageOk){
+    return bannerHTML() + `<div class="empty"><div class="big">⚠️</div><p>Impossible de charger les données pour le moment.</p></div>`;
+  }
+  const latest = latestPerWagon(entries);
+  if(latest.length === 0){
+    return `<div class="empty"><div class="big">🚃</div><p>Aucune donnée pour l'instant.<br>Ajoutez une saisie pour commencer le suivi.</p></div>`;
+  }
+  const counts = {}; STATUSES.forEach(s => counts[s]=0);
+  latest.forEach(e => { if(counts[e.status]!==undefined) counts[e.status]++; });
+  const isoles = latest.filter(e => e.isolation && e.isolation !== "Aucun").length;
+
+  const statBoxes = `
+    <div class="stat-grid">
+      <div class="stat-box dispo"><div class="num">${counts["Disponible"]}</div><div class="lab">Disponibles</div></div>
+      <div class="stat-box immob"><div class="num">${counts["Immobilisé"]}</div><div class="lab">Immobilisés</div></div>
+      <div class="stat-box repar"><div class="num">${counts["En réparation"]}</div><div class="lab">En réparation</div></div>
+      <div class="stat-box attente"><div class="num">${counts["En attente"]}</div><div class="lab">En attente</div></div>
+    </div>`;
+
+  const bySite = SITES.map(site => {
+    const rows = latest.filter(e => e.site === site);
+    const total = rows.length;
+    const segs = STATUSES.map(s => {
+      const n = rows.filter(r => r.status === s).length;
+      const pct = total ? (n/total*100) : 0;
+      return pct > 0 ? `<div class="seg" style="width:${pct}%;background:${STATUS_COLOR[s].c}"></div>` : "";
+    }).join("");
+    return `
+      <div class="site-bar-row">
+        <div class="head"><span>${esc(site)}</span><span style="color:var(--muted)">${total} wagon${total>1?"s":""}</span></div>
+        <div class="track">${segs || ""}</div>
+      </div>`;
+  }).join("");
+
+  return `
+    ${statBoxes}
+    <div class="card">
+      <h2 class="section-title">Répartition par site</h2>
+      ${bySite}
+    </div>
+    <div class="card">
+      <h2 class="section-title">Wagons sous code d'isolation</h2>
+      <div class="stat-box" style="border:none;padding:0;">
+        <div class="num" style="color:var(--amber)">${isoles}</div>
+        <div class="lab">sur ${latest.length} wagons suivis</div>
+      </div>
+    </div>
+  `;
+}
+
+function viewSaisie(){
+  return `
+    <div class="card">
+      <h2 class="section-title">Nouvelle saisie</h2>
+      <form id="saisieForm">
+        <label>Semaine</label>
+        <input type="text" name="week" value="${esc(isoWeekDefault())}" required>
+
+        <label>Site</label>
+        <select name="site" required>
+          <option value="">Choisir un site</option>
+          ${SITES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+        </select>
+
+        <label>Numéro de wagon</label>
+        <input type="tel" name="wagon" inputmode="numeric" maxlength="7" placeholder="7 chiffres" required>
+        <div class="field-error" id="wagonError">Le numéro doit contenir exactement 7 chiffres.</div>
+
+        <label>Série</label>
+        <select name="serie">
+          ${SERIES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+        </select>
+
+        <label>Situation</label>
+        <select name="status" required>
+          ${STATUSES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+        </select>
+
+        <label>Motif / anomalie</label>
+        <select name="motif">
+          ${MOTIFS.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join("")}
+        </select>
+
+        <label>Étiquette mod:</label>
+        <select name="isolation">
+          ${ISOLATION_CODES.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}
+        </select>
+
+        <label>Observation</label>
+        <textarea name="observation" placeholder="Remarque, levée officielle, acheminement..."></textarea>
+
+        <label>Agent / visiteur</label>
+        <input type="text" name="visitor" placeholder="Nom de l'agent">
+
+        <button class="btn" type="submit">Enregistrer</button>
+      </form>
+    </div>
+  `;
+}
+
+function viewSituation(){
+  const rows = filteredSituation();
+  const chips = ["Tous", ...SITES].map(s => `
+    <button data-site="${esc(s)}" class="${state.filterSite===s ? 'active':''}">${esc(s)}</button>
+  `).join("");
+
+  const list = rows.length === 0
+    ? `<div class="empty"><div class="big">🔍</div><p>Aucun wagon ne correspond à cette recherche.</p></div>`
+    : rows.map(e => wagonCardHTML(e)).join("");
+
+  return `
+    <div class="search-row">
+      <input type="tel" inputmode="numeric" id="searchInput" placeholder="Rechercher un numéro de wagon" value="${esc(state.search)}">
+    </div>
+    <div class="site-filter" id="siteFilter">${chips}</div>
+    ${list}
+  `;
+}
+
+function wagonCardHTML(e){
+  const col = STATUS_COLOR[e.status] || STATUS_COLOR["En attente"];
+  return `
+    <div class="wagon-card" data-wagon="${esc(e.wagon)}">
+      <div class="bar" style="background:${col.c}"></div>
+      <div class="body">
+        <div class="row1">
+          <span class="num">${esc(e.wagon)}</span>
+          <span class="badge" style="color:${col.c};background:${col.bg}">${esc(e.status)}</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-tag">${esc(e.site)}</span>
+          <span class="meta-tag">${esc(e.serie)}</span>
+          <span class="meta-tag">Sem. ${esc(e.week)}</span>
+          ${e.motif && e.motif !== "Aucune" ? `<span class="meta-tag">${esc(e.motif)}</span>` : ""}
+          ${e.isolation && e.isolation !== "Aucun" ? `<span class="meta-tag">Étiquette mod: ${esc(e.isolation)}</span>` : ""}
+        </div>
+        ${e.observation ? `<div class="card-obs">${esc(e.observation)}</div>` : ""}
+        <div class="card-foot">${esc(e.visitor || "Agent non renseigné")} · ${fmtDateTime(e.created_at)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function viewExport(){
+  const latest = latestPerWagon(entries);
+  return `
+    <div class="card">
+      <h2 class="section-title">Exporter les données</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 4px;">
+        ${latest.length} wagon${latest.length>1?"s":""} suivi${latest.length>1?"s":""}, ${entries.length} saisie${entries.length>1?"s":""} au total.
+      </p>
+      <button class="btn" id="exportSituation">Exporter la situation actuelle (CSV)</button>
+      <button class="btn secondary" id="exportHistorique">Exporter l'historique complet (CSV)</button>
+    </div>
+    <div class="card">
+      <h2 class="section-title">À propos des données</h2>
+      <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin:0;">
+        Les données sont enregistrées uniquement sur cet appareil et ce navigateur (pas de partage automatique avec d'autres personnes ou appareils). Utilisez l'export CSV pour transmettre vos relevés à un collègue. Toute nouvelle saisie s'ajoute à l'historique ; la situation actuelle correspond à la dernière saisie enregistrée pour chaque wagon.
+      </p>
+    </div>
+  `;
+}
+
+function bannerHTML(){
+  return `<div class="banner"><span>Erreur de chargement des données.</span><button id="retryLoad">Réessayer</button></div>`;
+}
+
+/* ---------- History modal ---------- */
+function openHistory(wagon){
+  const rows = entries.filter(e => e.wagon === wagon).sort((a,b) => b.created_at.localeCompare(a.created_at));
+  const overlay = document.getElementById("modalOverlay");
+  const sheet = document.getElementById("modalSheet");
+  sheet.innerHTML = `
+    <div class="modal-head">
+      <h3>Historique — wagon ${esc(wagon)}</h3>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    ${rows.map(e => {
+      const col = STATUS_COLOR[e.status] || STATUS_COLOR["En attente"];
+      return `
+        <div class="hist-item" style="border-color:${col.c}">
+          <div class="dot" style="background:${col.c}"></div>
+          <div class="when">${fmtDateTime(e.created_at)} · Semaine ${esc(e.week)}</div>
+          <div class="st" style="color:${col.c}">${esc(e.status)}</div>
+          <div class="det">${esc(e.site)} · ${esc(e.serie)}${e.motif && e.motif!=="Aucune" ? " · " + esc(e.motif) : ""}${e.isolation && e.isolation!=="Aucun" ? " · étiquette mod: " + esc(e.isolation) : ""}</div>
+          ${e.observation ? `<div class="det">${esc(e.observation)}</div>` : ""}
+          <div class="card-foot">${esc(e.visitor || "Agent non renseigné")}</div>
+          <button class="hist-del" data-id="${esc(e.id)}">Supprimer cette saisie</button>
+        </div>`;
+    }).join("")}
+  `;
+  overlay.classList.remove("hidden");
+  document.getElementById("modalClose").onclick = closeHistory;
+  sheet.querySelectorAll(".hist-del").forEach(btn => {
+    btn.onclick = async () => {
+      if(!confirm("Supprimer définitivement cette saisie ?")) return;
+      entries = entries.filter(e => e.id !== btn.dataset.id);
+      const ok = await saveEntries();
+      if(ok){ showToast("Saisie supprimée"); }
+      else { showToast("Échec de la suppression"); }
+      if(entries.some(e => e.wagon === wagon)) openHistory(wagon);
+      else closeHistory();
+      render();
+    };
+  });
+}
+function closeHistory(){
+  document.getElementById("modalOverlay").classList.add("hidden");
+}
+
+/* ---------- CSV export ---------- */
+function toCSV(rows, headers, mapper){
+  const lines = [headers.join(",")];
+  for(const r of rows){
+    lines.push(mapper(r).map(v => `"${String(v ?? "").replace(/"/g,'""')}"`).join(","));
+  }
+  return "\uFEFF" + lines.join("\r\n");
+}
+function downloadCSV(content, filename){
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ---------- Event handlers ---------- */
+function attachViewHandlers(){
+  if(state.view === "saisie"){
+    const form = document.getElementById("saisieForm");
+    const wagonInput = form.querySelector('input[name="wagon"]');
+    const serieSelect = form.querySelector('select[name="serie"]');
+    let serieAutoSet = false; // tracks whether the current value was set automatically
+    wagonInput.addEventListener("input", () => {
+      const matched = serieFromWagon(wagonInput.value.trim());
+      if(matched){
+        serieSelect.value = matched;
+        serieAutoSet = true;
+      } else if(serieAutoSet){
+        // prefix no longer matches (e.g. user is still typing/erasing) — reset to default
+        serieSelect.value = SERIES[0];
+        serieAutoSet = false;
+      }
+    });
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(form);
+      const wagon = fd.get("wagon").trim();
+      const wagonErr = document.getElementById("wagonError");
+      if(!/^\d{7}$/.test(wagon)){
+        wagonErr.classList.add("show");
+        return;
+      }
+      wagonErr.classList.remove("show");
+      const entry = {
+        id: uid(),
+        week: fd.get("week").trim(),
+        site: fd.get("site"),
+        wagon,
+        serie: fd.get("serie"),
+        status: fd.get("status"),
+        motif: fd.get("motif"),
+        isolation: fd.get("isolation"),
+        observation: fd.get("observation").trim(),
+        visitor: fd.get("visitor").trim(),
+        created_at: new Date().toISOString()
+      };
+      if(!entry.site){ showToast("Merci de choisir un site"); return; }
+      entries.push(entry);
+      const ok = await saveEntries();
+      if(ok){
+        showToast("Saisie enregistrée");
+        state.view = "situation";
+      } else {
+        showToast("Échec de l'enregistrement, réessayez");
+        entries.pop();
+      }
+      render();
+    });
+  }
+
+  if(state.view === "situation"){
+    const search = document.getElementById("searchInput");
+    search.addEventListener("input", () => {
+      state.search = search.value.replace(/\D/g,"");
+      render();
+      document.getElementById("searchInput").focus();
+      const val = document.getElementById("searchInput");
+      val.selectionStart = val.selectionEnd = val.value.length;
+    });
+    document.getElementById("siteFilter").addEventListener("click", (ev) => {
+      const btn = ev.target.closest("button[data-site]");
+      if(!btn) return;
+      state.filterSite = btn.dataset.site;
+      render();
+    });
+    document.querySelectorAll(".wagon-card").forEach(card => {
+      card.addEventListener("click", () => openHistory(card.dataset.wagon));
+    });
+  }
+
+  if(state.view === "export"){
+    document.getElementById("exportSituation").addEventListener("click", () => {
+      const rows = latestPerWagon(entries).sort((a,b)=>a.site.localeCompare(b.site)||a.wagon.localeCompare(b.wagon));
+      const csv = toCSV(rows,
+        ["Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
+        r => [r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
+      );
+      downloadCSV(csv, "situation_actuelle_wagons_charbon.csv");
+    });
+    document.getElementById("exportHistorique").addEventListener("click", () => {
+      const rows = [...entries].sort((a,b)=>a.created_at.localeCompare(b.created_at));
+      const csv = toCSV(rows,
+        ["Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
+        r => [r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
+      );
+      downloadCSV(csv, "historique_complet_wagons_charbon.csv");
+    });
+  }
+
+  const retry = document.getElementById("retryLoad");
+  if(retry){
+    retry.addEventListener("click", async () => {
+      await loadEntries();
+      render();
+    });
+  }
+}
+
+document.getElementById("tabbar").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button[data-view]");
+  if(!btn) return;
+  state.view = btn.dataset.view;
+  render();
+});
+
+/* ---------- Init ---------- */
+(async function init(){
+  document.getElementById("main").innerHTML = `<div class="loading-row">Chargement des données…</div>`;
+  await loadEntries();
+  render();
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{})); }
+</script>
+</body>
+</html>
