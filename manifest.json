@@ -1,7 +1,7 @@
 {
-  "name": "Suivi Wagons Charbon",
-  "short_name": "Wagons Charbon",
-  "description": "Suivi des wagons charbon ONCF sur les sites de Beni Ansar, Selouane et Hassi Blal.",
+  "name": "Suivi Wagons FRET",
+  "short_name": "Wagons FRET",
+  "description": "Suivi des wagons FRET ONCF sur les sites de Beni Ansar, Selouane et Hassi Blal.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

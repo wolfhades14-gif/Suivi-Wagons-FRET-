@@ -135,6 +135,12 @@
   .stat-box.repar .num{ color:var(--amber); }
   .stat-box.attente .num{ color:var(--primary); }
   .stat-box.reforme .num{ color:#6B4F8A; }
+  .memory-strip{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 11px; margin-bottom:12px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .memory-strip strong{ color:var(--text); }
+  .hist-note{ font-size:11.5px; color:var(--muted); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:10px; }
+  .hist-item.cancelled{ opacity:.58; }
+  .hist-cancel{ font-size:11.5px; color:var(--red); background:none; border:1px solid var(--border); border-radius:6px; padding:5px 8px; margin-top:6px; font-family:inherit; }
+  .stat-box.reforme .num{ color:#6B4F8A; }
 
   .site-bar-row{ margin-bottom:10px; }
   .site-bar-row .head{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
@@ -307,6 +313,7 @@ const STATUS_COLOR = {
   "Immobilisé":   { c: "var(--red)",    bg:"var(--red-bg)" },
   "En réparation":{ c: "var(--amber)",  bg:"var(--amber-bg)" },
   "En attente":   { c: "var(--primary)",bg:"var(--primary-bg)" },
+  "Réformé":      { c: "#6B4F8A",      bg:"#EEE7F5" },
   "Réformé":      { c: "#6B4F8A", bg:"#EEE7F5" }
 };
 const MOTIFS = ["Aucune","VG","RA","RLCB","RLB","ILD","PDR","Frein","Caisse","Trappe","Autre"];
@@ -315,25 +322,57 @@ const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
 /* ---------- State ---------- */
 let entries = [];
 let storageOk = true;
+let lastSavedAt = null;
 let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null };
 
+// V4: append-only local history. Every submission gets its own record and is never overwritten.
+// The old key is retained so existing pilot data remains available after the upgrade.
 const STORAGE_KEY = "wagons-charbon-entries";
+const BACKUP_KEY = "wagons-fret-history-backup";
+const META_KEY = "wagons-fret-storage-meta";
+const STORAGE_VERSION = 4;
 
 /* ---------- Storage helpers ---------- */
+function normalizeEntries(list){
+  return (Array.isArray(list) ? list : []).map((e, i) => ({
+    ...e,
+    id: e.id || ("legacy-" + i + "-" + Date.now().toString(36)),
+    seq: Number.isFinite(e.seq) ? e.seq : i + 1,
+    cancelled_at: e.cancelled_at || null,
+    cancelled_reason: e.cancelled_reason || ""
+  }));
+}
 async function loadEntries(){
-  // Standalone version: data lives in this browser/device only (localStorage),
-  // not shared with anyone else and not tied to Claude.
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    entries = raw ? JSON.parse(raw) : [];
+    const backup = localStorage.getItem(BACKUP_KEY);
+    let parsed = null;
+    if(raw){
+      try { parsed = JSON.parse(raw); } catch(e) { parsed = null; }
+    }
+    if(!parsed && backup){
+      try { parsed = JSON.parse(backup); } catch(e) { parsed = null; }
+    }
+    entries = normalizeEntries(parsed || []);
+    const metaRaw = localStorage.getItem(META_KEY);
+    const meta = metaRaw ? JSON.parse(metaRaw) : {};
+    lastSavedAt = meta.lastSavedAt || null;
+    storageOk = true;
+    // Repair/upgrade old records once, without changing their content.
+    if(entries.some((e,i) => !e.id || !Number.isFinite(e.seq))) await saveEntries();
   }catch(e){
+    storageOk = false;
     entries = [];
   }
-  storageOk = true;
 }
 async function saveEntries(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    const payload = JSON.stringify(entries);
+    // Write backup first: if the main record fails, the previous complete history survives here.
+    localStorage.setItem(BACKUP_KEY, payload);
+    localStorage.setItem(STORAGE_KEY, payload);
+    lastSavedAt = new Date().toISOString();
+    localStorage.setItem(META_KEY, JSON.stringify({version:STORAGE_VERSION, lastSavedAt, totalEntries:entries.length}));
     storageOk = true;
     return true;
   }catch(e){
@@ -341,6 +380,7 @@ async function saveEntries(){
     return false;
   }
 }
+function activeEntries(){ return entries.filter(e => !e.cancelled_at); }
 
 /* ---------- Utilities ---------- */
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -372,7 +412,10 @@ function showToast(msg){
 /* ---------- Derived data ---------- */
 function latestPerWagon(list){
   const map = new Map();
-  for(const e of list){ map.set(e.wagon, e); } // last occurrence wins (array is append-ordered)
+  for(const e of list){
+    if(e.cancelled_at) continue;
+    map.set(e.wagon, e); // last active occurrence wins; older records remain in history
+  }
   return Array.from(map.values());
 }
 function filteredSituation(){
@@ -565,15 +608,16 @@ function viewExport(){
     <div class="card">
       <h2 class="section-title">Exporter les données</h2>
       <p style="font-size:13px;color:var(--muted);margin:0 0 4px;">
-        ${latest.length} wagon${latest.length>1?"s":""} suivi${latest.length>1?"s":""}, ${entries.length} saisie${entries.length>1?"s":""} au total.
+        ${latest.length} wagon${latest.length>1?"s":""} suivi${latest.length>1?"s":""}, ${entries.length} saisie${entries.length>1?"s":""} conservée${entries.length>1?"s":""} dans l'historique.
       </p>
       <button class="btn" id="exportSituation">Exporter la situation actuelle (CSV)</button>
       <button class="btn secondary" id="exportHistorique">Exporter l'historique complet (CSV)</button>
+      <button class="btn secondary" id="exportBackup">Créer une sauvegarde complète (JSON)</button>
     </div>
     <div class="card">
       <h2 class="section-title">À propos des données</h2>
       <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin:0;">
-        Les données sont enregistrées uniquement sur cet appareil et ce navigateur (pas de partage automatique avec d'autres personnes ou appareils). Utilisez l'export CSV pour transmettre vos relevés à un collègue. Toute nouvelle saisie s'ajoute à l'historique ; la situation actuelle correspond à la dernière saisie enregistrée pour chaque wagon.
+        Les données sont enregistrées uniquement sur cet appareil et ce navigateur. Chaque nouvelle saisie est ajoutée à la mémoire locale et reste dans l'historique ; elle ne remplace jamais la saisie précédente. Une saisie erronée peut être annulée sans effacer sa trace. Pour une sécurité supplémentaire, utilisez régulièrement la sauvegarde JSON.
       </p>
     </div>
   `;
@@ -593,31 +637,35 @@ function openHistory(wagon){
       <h3>Historique — wagon ${esc(wagon)}</h3>
       <button class="modal-close" id="modalClose">&times;</button>
     </div>
+    <div class="hist-note">Chaque saisie est conservée. Une correction ne supprime pas l'ancien enregistrement : elle l'annule et laisse sa trace dans l'historique.</div>
     ${rows.map(e => {
       const col = STATUS_COLOR[e.status] || STATUS_COLOR["En attente"];
       return `
-        <div class="hist-item" style="border-color:${col.c}">
+        <div class="hist-item ${e.cancelled_at ? "cancelled" : ""}" style="border-color:${col.c}">
           <div class="dot" style="background:${col.c}"></div>
           <div class="when">${fmtDateTime(e.created_at)} · Semaine ${esc(e.week)}</div>
           <div class="st" style="color:${col.c}">${esc(e.status)}</div>
           <div class="det">${esc(e.site)} · ${esc(e.serie)}${e.motif && e.motif!=="Aucune" ? " · " + esc(e.motif) : ""}${e.isolation && e.isolation!=="Aucun" ? " · étiquette mod: " + esc(e.isolation) : ""}</div>
           ${e.observation ? `<div class="det">${esc(e.observation)}</div>` : ""}
           <div class="card-foot">${esc(e.visitor || "Agent non renseigné")}</div>
-          <button class="hist-del" data-id="${esc(e.id)}">Supprimer cette saisie</button>
+          ${e.cancelled_at ? `<div class="det" style="color:var(--red)">Saisie annulée le ${fmtDateTime(e.cancelled_at)}${e.cancelled_reason ? " · " + esc(e.cancelled_reason) : ""}</div>` : `<button class="hist-cancel" data-id="${esc(e.id)}">Annuler cette saisie</button>`}
         </div>`;
     }).join("")}
   `;
   overlay.classList.remove("hidden");
   document.getElementById("modalClose").onclick = closeHistory;
-  sheet.querySelectorAll(".hist-del").forEach(btn => {
+  sheet.querySelectorAll(".hist-cancel").forEach(btn => {
     btn.onclick = async () => {
-      if(!confirm("Supprimer définitivement cette saisie ?")) return;
-      entries = entries.filter(e => e.id !== btn.dataset.id);
+      const reason = prompt("Motif d'annulation (facultatif) :", "Erreur de saisie");
+      if(reason === null) return;
+      const target = entries.find(e => e.id === btn.dataset.id);
+      if(!target || target.cancelled_at) return;
+      target.cancelled_at = new Date().toISOString();
+      target.cancelled_reason = reason.trim();
       const ok = await saveEntries();
-      if(ok){ showToast("Saisie supprimée"); }
-      else { showToast("Échec de la suppression"); }
-      if(entries.some(e => e.wagon === wagon)) openHistory(wagon);
-      else closeHistory();
+      if(ok){ showToast("Saisie annulée, historique conservé"); }
+      else { target.cancelled_at = null; target.cancelled_reason = ""; showToast("Échec de l'enregistrement"); }
+      openHistory(wagon);
       render();
     };
   });
@@ -671,8 +719,11 @@ function attachViewHandlers(){
         return;
       }
       wagonErr.classList.remove("show");
+      const nextSeq = entries.reduce((m,e) => Math.max(m, Number(e.seq)||0), 0) + 1;
       const entry = {
         id: uid(),
+        seq: nextSeq,
+        record_version: 1,
         week: fd.get("week").trim(),
         site: fd.get("site"),
         wagon,
@@ -725,7 +776,7 @@ function attachViewHandlers(){
         ["Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
         r => [r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
       );
-      downloadCSV(csv, "situation_actuelle_wagons_charbon.csv");
+      downloadCSV(csv, "situation_actuelle_wagons_fret.csv");
     });
     document.getElementById("exportHistorique").addEventListener("click", () => {
       const rows = [...entries].sort((a,b)=>a.created_at.localeCompare(b.created_at));
@@ -733,7 +784,21 @@ function attachViewHandlers(){
         ["Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
         r => [r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
       );
-      downloadCSV(csv, "historique_complet_wagons_charbon.csv");
+      downloadCSV(csv, "historique_complet_wagons_fret.csv");
+    });
+    document.getElementById("exportBackup").addEventListener("click", () => {
+      const backup = {
+        app: "Suivi Wagons FRET",
+        version: STORAGE_VERSION,
+        exported_at: new Date().toISOString(),
+        total_entries: entries.length,
+        entries: entries
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href=url; a.download="sauvegarde_suivi_wagons_fret.json";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      showToast("Sauvegarde complète créée");
     });
   }
 
