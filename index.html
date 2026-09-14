@@ -304,6 +304,16 @@
   .age-summary>div{background:var(--bg);border-radius:9px;padding:9px 5px;text-align:center;}
   .age-summary b{display:block;font-size:19px;}
   .age-summary span{font-size:10.5px;color:var(--muted);}
+  .v9-overview{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .v9-panel{background:var(--bg);border-radius:10px;padding:11px;}
+  .v9-panel .v9-title{font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:650;}
+  .v9-panel b{display:block;font-size:24px;}
+  .v9-panel small{display:block;font-size:10.8px;color:var(--muted);margin-top:3px;line-height:1.35;}
+  .treatment-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .treatment-grid>div{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface);}
+  .treatment-grid b{display:block;font-size:22px;}
+  .treatment-grid span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .v9-note{font-size:11.5px;color:var(--muted);line-height:1.45;margin:9px 0 0;}
   @media (max-width:380px){.week-row{grid-template-columns:52px 1fr 24px 40px}.stat-box{padding:11px}.stat-box .num{font-size:23px;}}
 
 </style>
@@ -384,7 +394,7 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 8;
+const STORAGE_VERSION = 9;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 /* ---------- Storage helpers ---------- */
@@ -529,11 +539,13 @@ function renderHeaderChips(){
   const counts = {};
   STATUSES.forEach(s => counts[s] = 0);
   latest.forEach(e => { if(counts[e.status] !== undefined) counts[e.status]++; });
+  // V9: the reform indicator is persistent until a later Disponible entry.
+  counts["Réformé"] = reformPendingRows(latest).length;
   const el = document.getElementById("headerChips");
   el.innerHTML = STATUSES.map(s => `
     <div class="chip-stat">
       <span class="n">${counts[s]}</span>
-      <span class="l">${esc(s)}</span>
+      <span class="l">${s==="Réformé" ? "Réformé / non disp." : esc(s)}</span>
     </div>`).join("");
 }
 
@@ -678,6 +690,32 @@ function viewDashboard(){
     </div>
     ${statBoxes}
     <div class="card">
+      <h2 class="section-title">V9 · Parc non disponible</h2>
+      <div class="v9-overview">
+        <div class="v9-panel">
+          <div class="v9-title">Parc non disponible</div>
+          <b>${latest.filter(e=>e.status!=="Disponible").length}</b>
+          <small>Tout wagon dont la situation actuelle n'est pas « Disponible ».</small>
+        </div>
+        <div class="v9-panel">
+          <div class="v9-title">Réformés / non disponibles</div>
+          <b>${reformPendingRows(latest).length}</b>
+          <small>Réforme maintenue jusqu'à une saisie « Disponible ».</small>
+        </div>
+      </div>
+      <p class="v9-note">La réforme est un état métier persistant. Un wagon peut donc être « En réparation » tout en restant compté dans les « Réformés / non disponibles ».</p>
+    </div>
+    <div class="card">
+      <h2 class="section-title">V9 · État du traitement</h2>
+      <div class="treatment-grid">
+        <div><b>${latest.filter(e=>e.status==="Réformé" || e.status==="Immobilisé").length}</b><span>À traiter</span></div>
+        <div><b>${latest.filter(e=>e.status==="En réparation").length}</b><span>En cours</span></div>
+        <div><b>${latest.filter(e=>e.status==="En attente").length}</b><span>En attente d'action</span></div>
+        <div><b>${latest.filter(e=>e.status==="Disponible").length}</b><span>Traité / disponible</span></div>
+      </div>
+      <p class="v9-note">Cette lecture décrit l'étape de traitement actuelle. Elle est indépendante du marqueur « Réformé / non disponible ».</p>
+    </div>
+    <div class="card">
       <h2 class="section-title">Indicateurs de la semaine · ${esc(currentWeek)}</h2>
       <div class="kpi-grid">
         <div><b>${weekEntries.length}</b><span>Saisies</span></div>
@@ -719,7 +757,7 @@ function viewDashboard(){
       </div>
     </div>
     <div class="card">
-      <h2 class="section-title">V8 · Priorités d'action</h2>
+      <h2 class="section-title">V9 · Priorités d'action</h2>
       <p class="help-text">Lecture d'aide à la décision : priorité basée sur l'ancienneté réelle de l'épisode et sur le maintien du statut de réforme. Aucun seuil réglementaire n'est supposé.</p>
       <div class="attention-table">
         ${(()=>{
