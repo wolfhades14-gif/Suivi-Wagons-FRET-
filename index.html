@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Suivi Wagons FRET">
 <meta name="theme-color" content="#2C4A63">
-<meta name="description" content="Suivi des wagons charbon ONCF sur les sites de Beni Ansar, Selouane et Hassi Blal.">
+<meta name="description" content="Suivi des wagons FRET ONCF sur les sites de Beni Ansar, Selouane et Hassi Blal.">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-512.png">
@@ -251,6 +251,19 @@
   .banner{ background:var(--red-bg); color:var(--red); border-radius:var(--radius-sm); padding:10px 12px; font-size:13px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
   .banner button{ border:none; background:var(--red); color:#fff; border-radius:6px; padding:5px 10px; font-size:12px; font-family:inherit; }
   .loading-row{ text-align:center; padding:30px 0; color:var(--muted); font-size:13.5px; }
+
+  .storage-status{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:12px;padding:11px 12px;margin-bottom:12px;background:#F7FAFB;}
+  .storage-status .dot{width:10px;height:10px;border-radius:50%;background:var(--green);flex:0 0 auto;}
+  .storage-status.bad .dot{background:var(--red);}
+  .storage-status strong{font-size:13px;}
+  .small{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .backup-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px;}
+  .backup-stats>div{background:var(--primary-bg);border-radius:10px;padding:10px;text-align:center;}
+  .backup-stats b{display:block;font-size:20px;}
+  .backup-stats span{font-size:11.5px;color:var(--muted);}
+  .help-text{font-size:11.5px;color:var(--muted);line-height:1.45;margin:10px 0 0;}
+  .security-list{margin:0;padding-left:19px;color:var(--muted);font-size:12px;line-height:1.6;}
+  .security-list li{margin-bottom:5px;}
 </style>
 </head>
 <body>
@@ -313,8 +326,7 @@ const STATUS_COLOR = {
   "Immobilisé":   { c: "var(--red)",    bg:"var(--red-bg)" },
   "En réparation":{ c: "var(--amber)",  bg:"var(--amber-bg)" },
   "En attente":   { c: "var(--primary)",bg:"var(--primary-bg)" },
-  "Réformé":      { c: "#6B4F8A",      bg:"#EEE7F5" },
-  "Réformé":      { c: "#6B4F8A", bg:"#EEE7F5" }
+  "Réformé":      { c: "#6B4F8A",      bg:"#EEE7F5" }
 };
 const MOTIFS = ["Aucune","VG","RA","RLCB","RLB","ILD","PDR","Frein","Caisse","Trappe","Autre"];
 const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
@@ -330,7 +342,8 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 4;
+const STORAGE_VERSION = 5;
+const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 /* ---------- Storage helpers ---------- */
 function normalizeEntries(list){
@@ -346,12 +359,16 @@ async function loadEntries(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     const backup = localStorage.getItem(BACKUP_KEY);
+    const previousBackup = localStorage.getItem(PREVIOUS_BACKUP_KEY);
     let parsed = null;
     if(raw){
       try { parsed = JSON.parse(raw); } catch(e) { parsed = null; }
     }
     if(!parsed && backup){
       try { parsed = JSON.parse(backup); } catch(e) { parsed = null; }
+    }
+    if(!parsed && previousBackup){
+      try { parsed = JSON.parse(previousBackup); } catch(e) { parsed = null; }
     }
     entries = normalizeEntries(parsed || []);
     const metaRaw = localStorage.getItem(META_KEY);
@@ -368,11 +385,19 @@ async function loadEntries(){
 async function saveEntries(){
   try{
     const payload = JSON.stringify(entries);
-    // Write backup first: if the main record fails, the previous complete history survives here.
+    // V5: keep a previous snapshot before replacing the main record.
+    const current = localStorage.getItem(STORAGE_KEY);
+    if(current) localStorage.setItem(PREVIOUS_BACKUP_KEY, current);
+    // Main backup + main data. If the main write fails, the previous snapshot remains available.
     localStorage.setItem(BACKUP_KEY, payload);
     localStorage.setItem(STORAGE_KEY, payload);
     lastSavedAt = new Date().toISOString();
-    localStorage.setItem(META_KEY, JSON.stringify({version:STORAGE_VERSION, lastSavedAt, totalEntries:entries.length}));
+    localStorage.setItem(META_KEY, JSON.stringify({
+      version:STORAGE_VERSION,
+      lastSavedAt,
+      totalEntries:entries.length,
+      lastSeq:entries.reduce((m,e)=>Math.max(m,Number(e.seq)||0),0)
+    }));
     storageOk = true;
     return true;
   }catch(e){
@@ -604,21 +629,42 @@ function wagonCardHTML(e){
 
 function viewExport(){
   const latest = latestPerWagon(entries);
+  const lastSaved = lastSavedAt ? fmtDateTime(lastSavedAt) : "Jamais";
   return `
     <div class="card">
-      <h2 class="section-title">Exporter les données</h2>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 4px;">
-        ${latest.length} wagon${latest.length>1?"s":""} suivi${latest.length>1?"s":""}, ${entries.length} saisie${entries.length>1?"s":""} conservée${entries.length>1?"s":""} dans l'historique.
-      </p>
-      <button class="btn" id="exportSituation">Exporter la situation actuelle (CSV)</button>
-      <button class="btn secondary" id="exportHistorique">Exporter l'historique complet (CSV)</button>
-      <button class="btn secondary" id="exportBackup">Créer une sauvegarde complète (JSON)</button>
+      <h2 class="section-title">Sauvegarde & mémoire</h2>
+      <div class="storage-status ${storageOk ? "ok" : "bad"}">
+        <span class="dot"></span>
+        <div>
+          <strong>${storageOk ? "Mémoire locale opérationnelle" : "Problème de mémoire locale"}</strong>
+          <div class="small">Dernière sauvegarde automatique : ${esc(lastSaved)}</div>
+        </div>
+      </div>
+      <div class="backup-stats">
+        <div><b>${entries.length}</b><span>saisies conservées</span></div>
+        <div><b>${latest.length}</b><span>wagons suivis</span></div>
+      </div>
+      <button class="btn" id="exportBackup">💾 Sauvegarder toute la mémoire (JSON)</button>
+      <button class="btn secondary" id="importBackup">📥 Importer une sauvegarde</button>
+      <input type="file" id="backupFile" accept=".json,application/json" hidden>
+      <p class="help-text">Chaque saisie est enregistrée séparément. Une sauvegarde JSON permet de transférer ou récupérer toute la mémoire sur ce téléphone.</p>
     </div>
+
     <div class="card">
-      <h2 class="section-title">À propos des données</h2>
-      <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin:0;">
-        Les données sont enregistrées uniquement sur cet appareil et ce navigateur. Chaque nouvelle saisie est ajoutée à la mémoire locale et reste dans l'historique ; elle ne remplace jamais la saisie précédente. Une saisie erronée peut être annulée sans effacer sa trace. Pour une sécurité supplémentaire, utilisez régulièrement la sauvegarde JSON.
-      </p>
+      <h2 class="section-title">Exporter les données</h2>
+      <button class="btn secondary" id="exportSituation">Exporter la situation actuelle (CSV)</button>
+      <button class="btn secondary" id="exportHistorique">Exporter l'historique complet (CSV)</button>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Sécurité des données</h2>
+      <ul class="security-list">
+        <li>Chaque enregistrement possède son propre identifiant et numéro de séquence.</li>
+        <li>Les nouvelles saisies n'écrasent pas les anciennes.</li>
+        <li>Une saisie annulée reste visible dans l'historique.</li>
+        <li>Une copie précédente de la mémoire est conservée localement avant chaque nouvelle sauvegarde.</li>
+        <li>Les données restent sur cet appareil et ce navigateur : elles ne sont pas synchronisées entre téléphones.</li>
+      </ul>
     </div>
   `;
 }
@@ -778,17 +824,20 @@ function attachViewHandlers(){
       );
       downloadCSV(csv, "situation_actuelle_wagons_fret.csv");
     });
+
     document.getElementById("exportHistorique").addEventListener("click", () => {
       const rows = [...entries].sort((a,b)=>a.created_at.localeCompare(b.created_at));
       const csv = toCSV(rows,
-        ["Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
-        r => [r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
+        ["N° séquence","Identifiant","Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le","Annulée le","Motif annulation"],
+        r => [r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at ? fmtDateTime(r.cancelled_at) : "",r.cancelled_reason]
       );
       downloadCSV(csv, "historique_complet_wagons_fret.csv");
     });
+
     document.getElementById("exportBackup").addEventListener("click", () => {
       const backup = {
         app: "Suivi Wagons FRET",
+        format: "suivi-wagons-fret-backup",
         version: STORAGE_VERSION,
         exported_at: new Date().toISOString(),
         total_entries: entries.length,
@@ -796,9 +845,53 @@ function attachViewHandlers(){
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json;charset=utf-8"});
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href=url; a.download="sauvegarde_suivi_wagons_fret.json";
+      const a = document.createElement("a"); a.href=url; a.download="sauvegarde_suivi_wagons_fret_"+new Date().toISOString().slice(0,10)+".json";
       document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
       showToast("Sauvegarde complète créée");
+    });
+
+    const importBtn = document.getElementById("importBackup");
+    const fileInput = document.getElementById("backupFile");
+    importBtn.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = "";
+      if(!file) return;
+      try{
+        const parsed = JSON.parse(await file.text());
+        const incoming = normalizeEntries(parsed.entries || parsed);
+        if(!Array.isArray(incoming) || incoming.length === 0){
+          showToast("Sauvegarde vide ou invalide");
+          return;
+        }
+        const maxSeq = entries.reduce((m,e)=>Math.max(m,Number(e.seq)||0),0);
+        const seen = new Set(entries.map(e=>e.id));
+        let added = 0;
+        for(const e of incoming){
+          if(!e.id || seen.has(e.id)) continue;
+          e.seq = Number(e.seq)||0;
+          entries.push(e);
+          seen.add(e.id);
+          added++;
+        }
+        if(added === 0){
+          showToast("Aucune nouvelle saisie à importer");
+          return;
+        }
+        // Keep sequence numbers unique after a merge.
+        const ordered = [...entries].sort((a,b)=>(Number(a.seq)||0)-(Number(b.seq)||0) || a.created_at.localeCompare(b.created_at));
+        ordered.forEach((e,i)=>e.seq=i+1);
+        const ok = await saveEntries();
+        if(ok){
+          showToast(added + " saisie(s) importée(s) — mémoire conservée");
+          render();
+        }else{
+          showToast("Échec de la sauvegarde après import");
+        }
+      }catch(err){
+        showToast("Fichier JSON invalide");
+      }
     });
   }
 
