@@ -1,7 +1,7 @@
 {
   "name": "Suivi Wagons FRET",
   "short_name": "Wagons FRET",
-  "description": "Suivi et pilotage opérationnel des wagons FRET ONCF sur les sites de Beni Ansar, Selouane et Hassi Blal.",
+  "description": "Suivi et pilotage opérationnel des wagons FRET ONCF · Version V8",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
