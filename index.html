@@ -335,6 +335,78 @@
 
 
   .report-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.report-grid label{font-size:12px;color:var(--muted)}.report-grid input,.report-grid select{margin-top:5px}.export-actions{display:grid;gap:8px;margin-top:12px}.chart-preview{overflow:auto}[data-visitor-label]{display:none} .visitor-label{display:none}
+
+
+/* V11.2 · Palette opérationnelle — conserver l'identité visuelle validée */
+:root{
+  --bg:#EEF3F7;
+  --surface:#FFFFFF;
+  --border:#D9E2EA;
+  --text:#17324A;
+  --muted:#607487;
+  --primary:#15557D;
+  --primary-light:#1F6F9F;
+  --primary-bg:#E4F0F7;
+  --green:#16A765;
+  --green-bg:#DDF5E9;
+  --red:#E94B55;
+  --red-bg:#FCE3E5;
+  --amber:#FFB71B;
+  --amber-bg:#FFF1C9;
+  --purple:#6E4BC4;
+  --teal:#12A7A7;
+  --sky:#4AA7E8;
+  --navy:#244D70;
+}
+body{background:var(--bg);color:var(--text)}
+header.top{background:linear-gradient(135deg,#174D73 0%,#1B628F 100%);}
+header.top p{color:#C9DFEE}
+.user-chip{background:rgba(255,255,255,.14)}
+.role-pill{background:#E9F3F9;color:#244D70}
+nav.tabbar{background:#fff;border-top:1px solid #D7E1E9;box-shadow:0 -5px 18px rgba(23,50,74,.06)}
+nav.tabbar button.active{color:#15557D;background:#E3EFF7}
+.card,.wagon-card,.stat-box,.treatment-grid>div,.attention-row{box-shadow:0 2px 10px rgba(23,50,74,.045)}
+.btn{background:#15557D}
+.btn:active{background:#1F6F9F}
+
+/* KPI — couleurs pleines comme sur la maquette validée */
+.stat-grid .stat-box{border:none;color:#fff;min-height:74px;display:flex;flex-direction:column;justify-content:center}
+.stat-grid .stat-box .num,.stat-grid .stat-box .lab{color:#fff}
+.stat-grid .stat-box.dispo{background:#16A765}
+.stat-grid .stat-box.immob{background:#E94B55}
+.stat-grid .stat-box.repar{background:#FFB71B}
+.stat-grid .stat-box.attente{background:#2F8DDF}
+.stat-grid .stat-box.reforme{background:#6E4BC4}
+.stat-grid .stat-box:not(.dispo):not(.immob):not(.repar):not(.attente):not(.reforme){background:#12A7A7}
+.stat-grid .stat-box .lab{font-weight:650}
+
+/* Panneaux opérationnels */
+.v9-overview .v9-panel:first-child{background:#DDF5E9}
+.v9-overview .v9-panel:first-child .v9-title{color:#168353}
+.v9-overview .v9-panel:first-child b{color:#16A765}
+.v9-overview .v9-panel:nth-child(2){background:#EEE7FF}
+.v9-overview .v9-panel:nth-child(2) .v9-title{color:#6545B5}
+.v9-overview .v9-panel:nth-child(2) b{color:#6E4BC4}
+.kpi-grid>div:nth-child(1){background:#E5F0F8}
+.kpi-grid>div:nth-child(2){background:#FCE3E5}
+.kpi-grid>div:nth-child(3){background:#FFF1C9}
+.kpi-grid>div:nth-child(4){background:#E0F4F4}
+.quick-grid>div{background:#EAF2F7}
+.age-summary>div{background:#F2F6F9}
+.week-fill{background:#2F8DDF}
+.filter-chip.active,.site-filter button.active{background:#15557D;border-color:#15557D}
+.storage-status .dot{background:#16A765}
+
+/* Titres et éléments d'accent */
+.section-title{color:#17324A}
+.treatment-grid>div:nth-child(1) b{color:#E94B55}
+.treatment-grid>div:nth-child(2) b{color:#FF9F00}
+.treatment-grid>div:nth-child(3) b{color:#2F8DDF}
+.treatment-grid>div:nth-child(4) b{color:#16A765}
+.age-badge.a7{color:#148457;background:#DDF5E9}
+.age-badge.a15{color:#B36A00;background:#FFF1C9}
+.age-badge.a30{color:#D73540;background:#FCE3E5}
+
 </style>
 </head>
 <body>
@@ -1136,7 +1208,79 @@ function buildReportHTML(r){
   const motifRows=r.motifs.map(x=>`<tr><td>${escHtml(x.motif)}</td><td>${x.count}</td></tr>`).join("");
   const weekRows=r.weeks.map(x=>`<tr><td>${escHtml(x.week)}</td><td>${x.saisies}</td><td>${x.imm}</td><td>${x.dispo}</td><td>${x.reforme}</td></tr>`).join("");
   const chart=`<div class="chart"><h3>Évolution des saisies par semaine</h3><svg viewBox="0 0 900 300" role="img" aria-label="Graphique des saisies par semaine"><line x1="60" y1="250" x2="860" y2="250" stroke="#999"/><line x1="60" y1="30" x2="60" y2="250" stroke="#999"/>${r.weeks.map((x,i)=>{const max=Math.max(1,...r.weeks.map(w=>w.saisies));const bw=Math.min(60,700/Math.max(1,r.weeks.length));const h=200*x.saisies/max;const x0=75+i*(780/Math.max(1,r.weeks.length));return `<rect x="${x0}" y="${250-h}" width="${bw}" height="${h}" fill="#2C4A63"/><text x="${x0+bw/2}" y="270" text-anchor="middle" font-size="11">${escHtml(x.week)}</text><text x="${x0+bw/2}" y="${240-h}" text-anchor="middle" font-size="11">${x.saisies}</text>`}).join("")}</svg></div>`;
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escHtml(reportTitle(r))}</title><style>body{font-family:Arial,sans-serif;margin:32px;color:#16232E}h1{margin-bottom:4px}h2{margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:6px}.meta{color:#5B6B7A}.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.box{border:1px solid #ddd;border-radius:8px;padding:12px}.box b{display:block;font-size:24px}.box span{font-size:12px;color:#5B6B7A}table{border-collapse:collapse;width:100%;margin-top:10px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#f1f3f5}.chart{margin-top:18px;border:1px solid #ddd;padding:12px}svg{width:100%;height:auto}@media print{body{margin:15mm}.no-print{display:none}}</style></head><body><h1>${escHtml(reportTitle(r))}</h1><div class="meta">Période : ${escHtml(reportPeriodLabel(r))} · Généré le ${escHtml(new Date().toLocaleString("fr-FR"))}</div><h2>1. Synthèse KPI</h2><div class="kpi"><div class="box"><b>${k.liberes}</b><span>Wagons remis à disposition</span></div><div class="box"><b>${k.nouveaux}</b><span>Nouveaux immobilisés</span></div><div class="box"><b>${k.liberes}</b><span>Wagons libérés / disponibles</span></div><div class="box"><b>${k.reformes}</b><span>Réformés / non disponibles</span></div><div class="box"><b>${k.anomalies}</b><span>Anomalies / motifs renseignés</span></div><div class="box"><b>${k.resolved}</b><span>Situations saisies comme disponibles</span></div><div class="box"><b>${k.taux}%</b><span>Taux indicatif de disponibilité des saisies</span></div><div class="box"><b>${k.actions}</b><span>Saisies en réparation / attente</span></div></div><p class="meta">Ancienneté des épisodes en cours : ≥7 j : ${k.age7} · ≥15 j : ${k.age15} · ≥30 j : ${k.age30}. Ces seuils sont des seuils de pilotage de l'application, pas des seuils réglementaires.</p><h2>2. Répartition par site</h2><table><thead><tr><th>Site</th><th>Wagons suivis</th><th>Immobilisés</th><th>En réparation</th><th>En attente</th><th>Réformés / non disp.</th></tr></thead><tbody>${siteRows||'<tr><td colspan="6">Aucune donnée</td></tr>'}</tbody></table><h2>3. Motifs des situations en cours</h2><table><thead><tr><th>Motif</th><th>Nombre</th></tr></thead><tbody>${motifRows||'<tr><td colspan="2">Aucune donnée</td></tr>'}</tbody></table><h2>4. Activité par semaine</h2><table><thead><tr><th>Semaine</th><th>Saisies</th><th>Immobilisés</th><th>Disponibles</th><th>Réformés</th></tr></thead><tbody>${weekRows||'<tr><td colspan="5">Aucune donnée</td></tr>'}</tbody></table><h2>5. Graphiques</h2><div class="chart"><h3>Activité par semaine</h3>${svgActivity(r)}</div><div class="chart"><h3>Wagons suivis par site</h3>${svgSites(r)}</div><div class="chart"><h3>Top motifs des situations en cours</h3>${svgMotifs(r)}</div><h2>6. Données nominatives</h2><table><thead><tr><th>Wagon</th><th>Site</th><th>Série</th><th>Situation</th><th>Motif</th><th>Agent</th><th>Date</th></tr></thead><tbody>${r.inPeriod.map(e=>`<tr><td>${escHtml(e.wagon)}</td><td>${escHtml(e.site)}</td><td>${escHtml(e.serie)}</td><td>${escHtml(e.status)}</td><td>${escHtml(e.motif)}</td><td>${escHtml(e.visitor)}</td><td>${escHtml(fmtDateTime(e.created_at))}</td></tr>`).join("")||'<tr><td colspan="7">Aucune donnée</td></tr>'}</tbody></table><p class="meta">Document généré automatiquement à partir des saisies conservées dans l'application. Vérifier les données avant diffusion.</p></body></html>`;
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escHtml(reportTitle(r))}</title><style>body{font-family:Arial,sans-serif;margin:32px;color:#16232E}h1{margin-bottom:4px}h2{margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:6px}.meta{color:#5B6B7A}.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.box{border:1px solid #ddd;border-radius:8px;padding:12px}.box b{display:block;font-size:24px}.box span{font-size:12px;color:#5B6B7A}table{border-collapse:collapse;width:100%;margin-top:10px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#f1f3f5}.chart{margin-top:18px;border:1px solid #ddd;padding:12px}svg{width:100%;height:auto}@media print{body{margin:15mm}.no-print{display:none}}
+
+/* V11.2 · Palette opérationnelle — conserver l'identité visuelle validée */
+:root{
+  --bg:#EEF3F7;
+  --surface:#FFFFFF;
+  --border:#D9E2EA;
+  --text:#17324A;
+  --muted:#607487;
+  --primary:#15557D;
+  --primary-light:#1F6F9F;
+  --primary-bg:#E4F0F7;
+  --green:#16A765;
+  --green-bg:#DDF5E9;
+  --red:#E94B55;
+  --red-bg:#FCE3E5;
+  --amber:#FFB71B;
+  --amber-bg:#FFF1C9;
+  --purple:#6E4BC4;
+  --teal:#12A7A7;
+  --sky:#4AA7E8;
+  --navy:#244D70;
+}
+body{background:var(--bg);color:var(--text)}
+header.top{background:linear-gradient(135deg,#174D73 0%,#1B628F 100%);}
+header.top p{color:#C9DFEE}
+.user-chip{background:rgba(255,255,255,.14)}
+.role-pill{background:#E9F3F9;color:#244D70}
+nav.tabbar{background:#fff;border-top:1px solid #D7E1E9;box-shadow:0 -5px 18px rgba(23,50,74,.06)}
+nav.tabbar button.active{color:#15557D;background:#E3EFF7}
+.card,.wagon-card,.stat-box,.treatment-grid>div,.attention-row{box-shadow:0 2px 10px rgba(23,50,74,.045)}
+.btn{background:#15557D}
+.btn:active{background:#1F6F9F}
+
+/* KPI — couleurs pleines comme sur la maquette validée */
+.stat-grid .stat-box{border:none;color:#fff;min-height:74px;display:flex;flex-direction:column;justify-content:center}
+.stat-grid .stat-box .num,.stat-grid .stat-box .lab{color:#fff}
+.stat-grid .stat-box.dispo{background:#16A765}
+.stat-grid .stat-box.immob{background:#E94B55}
+.stat-grid .stat-box.repar{background:#FFB71B}
+.stat-grid .stat-box.attente{background:#2F8DDF}
+.stat-grid .stat-box.reforme{background:#6E4BC4}
+.stat-grid .stat-box:not(.dispo):not(.immob):not(.repar):not(.attente):not(.reforme){background:#12A7A7}
+.stat-grid .stat-box .lab{font-weight:650}
+
+/* Panneaux opérationnels */
+.v9-overview .v9-panel:first-child{background:#DDF5E9}
+.v9-overview .v9-panel:first-child .v9-title{color:#168353}
+.v9-overview .v9-panel:first-child b{color:#16A765}
+.v9-overview .v9-panel:nth-child(2){background:#EEE7FF}
+.v9-overview .v9-panel:nth-child(2) .v9-title{color:#6545B5}
+.v9-overview .v9-panel:nth-child(2) b{color:#6E4BC4}
+.kpi-grid>div:nth-child(1){background:#E5F0F8}
+.kpi-grid>div:nth-child(2){background:#FCE3E5}
+.kpi-grid>div:nth-child(3){background:#FFF1C9}
+.kpi-grid>div:nth-child(4){background:#E0F4F4}
+.quick-grid>div{background:#EAF2F7}
+.age-summary>div{background:#F2F6F9}
+.week-fill{background:#2F8DDF}
+.filter-chip.active,.site-filter button.active{background:#15557D;border-color:#15557D}
+.storage-status .dot{background:#16A765}
+
+/* Titres et éléments d'accent */
+.section-title{color:#17324A}
+.treatment-grid>div:nth-child(1) b{color:#E94B55}
+.treatment-grid>div:nth-child(2) b{color:#FF9F00}
+.treatment-grid>div:nth-child(3) b{color:#2F8DDF}
+.treatment-grid>div:nth-child(4) b{color:#16A765}
+.age-badge.a7{color:#148457;background:#DDF5E9}
+.age-badge.a15{color:#B36A00;background:#FFF1C9}
+.age-badge.a30{color:#D73540;background:#FCE3E5}
+
+</style></head><body><h1>${escHtml(reportTitle(r))}</h1><div class="meta">Période : ${escHtml(reportPeriodLabel(r))} · Généré le ${escHtml(new Date().toLocaleString("fr-FR"))}</div><h2>1. Synthèse KPI</h2><div class="kpi"><div class="box"><b>${k.liberes}</b><span>Wagons remis à disposition</span></div><div class="box"><b>${k.nouveaux}</b><span>Nouveaux immobilisés</span></div><div class="box"><b>${k.liberes}</b><span>Wagons libérés / disponibles</span></div><div class="box"><b>${k.reformes}</b><span>Réformés / non disponibles</span></div><div class="box"><b>${k.anomalies}</b><span>Anomalies / motifs renseignés</span></div><div class="box"><b>${k.resolved}</b><span>Situations saisies comme disponibles</span></div><div class="box"><b>${k.taux}%</b><span>Taux indicatif de disponibilité des saisies</span></div><div class="box"><b>${k.actions}</b><span>Saisies en réparation / attente</span></div></div><p class="meta">Ancienneté des épisodes en cours : ≥7 j : ${k.age7} · ≥15 j : ${k.age15} · ≥30 j : ${k.age30}. Ces seuils sont des seuils de pilotage de l'application, pas des seuils réglementaires.</p><h2>2. Répartition par site</h2><table><thead><tr><th>Site</th><th>Wagons suivis</th><th>Immobilisés</th><th>En réparation</th><th>En attente</th><th>Réformés / non disp.</th></tr></thead><tbody>${siteRows||'<tr><td colspan="6">Aucune donnée</td></tr>'}</tbody></table><h2>3. Motifs des situations en cours</h2><table><thead><tr><th>Motif</th><th>Nombre</th></tr></thead><tbody>${motifRows||'<tr><td colspan="2">Aucune donnée</td></tr>'}</tbody></table><h2>4. Activité par semaine</h2><table><thead><tr><th>Semaine</th><th>Saisies</th><th>Immobilisés</th><th>Disponibles</th><th>Réformés</th></tr></thead><tbody>${weekRows||'<tr><td colspan="5">Aucune donnée</td></tr>'}</tbody></table><h2>5. Graphiques</h2><div class="chart"><h3>Activité par semaine</h3>${svgActivity(r)}</div><div class="chart"><h3>Wagons suivis par site</h3>${svgSites(r)}</div><div class="chart"><h3>Top motifs des situations en cours</h3>${svgMotifs(r)}</div><h2>6. Données nominatives</h2><table><thead><tr><th>Wagon</th><th>Site</th><th>Série</th><th>Situation</th><th>Motif</th><th>Agent</th><th>Date</th></tr></thead><tbody>${r.inPeriod.map(e=>`<tr><td>${escHtml(e.wagon)}</td><td>${escHtml(e.site)}</td><td>${escHtml(e.serie)}</td><td>${escHtml(e.status)}</td><td>${escHtml(e.motif)}</td><td>${escHtml(e.visitor)}</td><td>${escHtml(fmtDateTime(e.created_at))}</td></tr>`).join("")||'<tr><td colspan="7">Aucune donnée</td></tr>'}</tbody></table><p class="meta">Document généré automatiquement à partir des saisies conservées dans l'application. Vérifier les données avant diffusion.</p></body></html>`;
 }
 function downloadBlob(content,filename,type){const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);}
 function reportFilename(ext){return `bilan_wagons_fret_${new Date().toISOString().slice(0,10)}.${ext}`;}
