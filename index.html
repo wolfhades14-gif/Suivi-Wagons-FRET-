@@ -500,7 +500,7 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 11;
+const STORAGE_VERSION = 12;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 
@@ -967,10 +967,14 @@ function viewSaisie(){
         <input type="text" name="week" value="${esc(isoWeekDefault())}" required>
 
         <label>Site</label>
-        <select name="site" required>
-          <option value="">Choisir un site</option>
-          ${SITES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
-        </select>
+        ${isVisitor()
+          ? `<input type="text" value="${esc(currentUser.site)}" readonly aria-label="Site affecté au compte">
+             <input type="hidden" name="site" value="${esc(currentUser.site)}">
+             <div class="muted-small" style="margin-top:4px">Site affecté automatiquement à votre compte.</div>`
+          : `<select name="site" required>
+               <option value="">Choisir un site</option>
+               ${SITES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+             </select>`}
 
         <label>Numéro de wagon</label>
         <input type="tel" name="wagon" inputmode="numeric" maxlength="7" placeholder="7 chiffres" required>
@@ -1021,7 +1025,9 @@ function viewSituation(){
     <div class="search-row">
       <input type="tel" inputmode="numeric" id="searchInput" placeholder="Rechercher un numéro de wagon" value="${esc(state.search)}">
     </div>
-    <div class="site-filter" id="siteFilter">${chips}</div>
+    ${isVisitor()
+      ? `<div class="site-scope-note">Site : <strong>${esc(currentUser.site)}</strong></div>`
+      : `<div class="site-filter" id="siteFilter">${chips}</div>`}
     ${list}
   `;
 }
@@ -1254,7 +1260,9 @@ function bannerHTML(){
 
 /* ---------- History modal ---------- */
 function openHistory(wagon){
-  const rows = entries.filter(e => e.wagon === wagon).sort((a,b) => b.created_at.localeCompare(a.created_at));
+  let rows = entries.filter(e => e.wagon === wagon);
+  if(isVisitor()) rows = rows.filter(e => e.site === currentUser.site);
+  rows.sort((a,b) => b.created_at.localeCompare(a.created_at));
   const overlay = document.getElementById("modalOverlay");
   const sheet = document.getElementById("modalSheet");
   sheet.innerHTML = `
