@@ -1,7 +1,7 @@
 {
   "name": "Suivi Wagons FRET",
   "short_name": "Wagons FRET",
-  "description": "Suivi et pilotage opérationnel des wagons FRET ONCF · Version V9",
+  "description": "Suivi des wagons FRET ONCF — V10 pilote multi-utilisateurs.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

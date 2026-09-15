@@ -316,13 +316,36 @@
   .v9-note{font-size:11.5px;color:var(--muted);line-height:1.45;margin:9px 0 0;}
   @media (max-width:380px){.week-row{grid-template-columns:52px 1fr 24px 40px}.stat-box{padding:11px}.stat-box .num{font-size:23px;}}
 
+
+  /* V10 · comptes et rôles */
+  .auth-screen{min-height:100vh;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
+  .auth-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:0 8px 30px rgba(0,0,0,.08);}
+  .auth-card h1{margin:0 0 4px;font-size:22px}.auth-card p{margin:0 0 18px;color:var(--muted);font-size:13px}
+  .auth-badge{display:inline-block;background:var(--primary-bg);color:var(--primary);border-radius:999px;padding:5px 9px;font-size:11px;font-weight:700;margin-bottom:12px}
+  .auth-help{font-size:11px;color:var(--muted);line-height:1.45;margin-top:12px}
+  .user-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border-radius:999px;padding:5px 9px;margin-top:8px;font-size:11px}
+  .role-pill{font-size:10px;border-radius:999px;padding:3px 7px;background:var(--primary-bg);color:var(--primary);font-weight:700}
+  .simple-home{display:grid;gap:10px}.simple-action{display:block;width:100%;text-align:left;border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:14px;font-family:inherit;color:var(--text);font-size:14px}.simple-action strong{display:block}.simple-action span{display:block;color:var(--muted);font-size:11.5px;margin-top:3px}
+  .v10-section{margin-bottom:12px}.v10-user-row{display:flex;justify-content:space-between;align-items:center;gap:10px}.v10-user-meta{font-size:12px;color:var(--muted)}
+  .user-list{display:grid;gap:8px}.user-item{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface)}.user-item .top{display:flex;justify-content:space-between;gap:8px;align-items:center}.user-item small{display:block;color:var(--muted);margin-top:3px}
+  .danger-btn{border:1px solid var(--red);background:var(--red-bg);color:var(--red);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:11px}
+  .logout-btn{margin-left:auto;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:8px;padding:6px 9px;font-family:inherit;font-size:11px}
+  .header-user-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.header-user-row .user-chip{margin-top:0}
+  .cloud-note{font-size:11.5px;color:var(--muted);line-height:1.45;background:var(--bg);border-radius:9px;padding:10px}.cloud-link{display:block;margin-top:8px;text-align:center;text-decoration:none}
+
 </style>
 </head>
 <body>
 <div class="app">
   <header class="top">
-    <h1>Suivi Wagons FRET</h1>
-    <p>Beni Ansar, Selouane et Hassi Blal</p>
+    <div class="header-user-row">
+      <div>
+        <h1>Suivi Wagons FRET</h1>
+        <p>Beni Ansar, Selouane et Hassi Blal</p>
+        <div class="user-chip" id="currentUserChip"></div>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Déconnexion</button>
+    </div>
     <div class="chips-row" id="headerChips"></div>
   </header>
 
@@ -340,6 +363,14 @@
     <button data-view="situation">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       Situation
+    </button>
+    <button data-view="pilotage" data-controller-only>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16"/><path d="M8 16v-5M12 16V7M16 16v-9"/></svg>
+      Pilotage
+    </button>
+    <button data-view="users" data-controller-only>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.5a3 3 0 0 1 0 5.8M17 14c2.2.8 4 3 4 6"/></svg>
+      Utilisateurs
     </button>
     <button data-view="export">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
@@ -387,6 +418,7 @@ const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
 let entries = [];
 let storageOk = true;
 let lastSavedAt = null;
+let currentUser = null;
 let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null, dashboardSite: "Tous", dashboardStatus: "Tous" };
 
 // V4: append-only local history. Every submission gets its own record and is never overwritten.
@@ -394,8 +426,71 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 9;
+const STORAGE_VERSION = 10;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
+
+
+/* ---------- V10 · Users / roles (pilot local) ---------- */
+const USERS_KEY = "wagons-fret-users-v10";
+const SESSION_KEY = "wagons-fret-session-v10";
+const DEFAULT_USERS = [
+  {id:"ctrl-001", username:"controleur", name:"Contrôleur matériel", role:"controller", site:"Tous", password:"TMN2026"},
+  {id:"vis-001", username:"visiteur01", name:"Visiteur 01", role:"visitor", site:"Selouane", password:"1234"},
+  {id:"vis-002", username:"visiteur02", name:"Visiteur 02", role:"visitor", site:"Beni Ansar (Gare)", password:"1234"}
+];
+function loadUsers(){
+  try{
+    const raw=localStorage.getItem(USERS_KEY);
+    if(!raw){ localStorage.setItem(USERS_KEY, JSON.stringify(DEFAULT_USERS)); return [...DEFAULT_USERS]; }
+    const u=JSON.parse(raw); return Array.isArray(u)&&u.length ? u : [...DEFAULT_USERS];
+  }catch(e){ return [...DEFAULT_USERS]; }
+}
+function saveUsers(users){ localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+function isController(){ return !!currentUser && currentUser.role === "controller"; }
+function isVisitor(){ return !!currentUser && currentUser.role === "visitor"; }
+function currentSession(){
+  try{ const raw=sessionStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+}
+function setSession(user){
+  currentUser={id:user.id,username:user.username,name:user.name,role:user.role,site:user.site};
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
+}
+function clearSession(){ currentUser=null; sessionStorage.removeItem(SESSION_KEY); }
+function ensureSession(){
+  const s=currentSession();
+  if(!s) return false;
+  const user=loadUsers().find(u=>u.id===s.id && u.username===s.username && u.role===s.role);
+  if(!user) return false;
+  currentUser={id:user.id,username:user.username,name:user.name,role:user.role,site:user.site};
+  return true;
+}
+function renderLogin(){
+  document.body.innerHTML=`<div class="auth-screen"><div class="auth-card">
+    <div class="auth-badge">V10 · PILOTE MULTI-UTILISATEURS</div>
+    <h1>Suivi Wagons FRET</h1>
+    <p>Connectez-vous pour accéder à votre interface.</p>
+    <form id="loginForm">
+      <label>Compte</label><input name="username" autocomplete="username" placeholder="Identifiant" required>
+      <label>Mot de passe</label><input name="password" type="password" autocomplete="current-password" placeholder="Mot de passe" required>
+      <button class="btn" type="submit">Se connecter</button>
+    </form>
+    <div class="auth-help"><strong>Comptes de test :</strong> controleur / TMN2026 · visiteur01 / 1234 · visiteur02 / 1234<br><br>Prototype pilote : les comptes sont actuellement stockés localement sur cet appareil. La connexion Microsoft/OneDrive sera branchée après validation de l'architecture cloud.</div>
+  </div></div>`;
+  document.getElementById("loginForm").addEventListener("submit",ev=>{
+    ev.preventDefault();
+    const fd=new FormData(ev.currentTarget), username=String(fd.get("username")||"").trim(), password=String(fd.get("password")||"");
+    const user=loadUsers().find(u=>u.username===username && u.password===password);
+    if(!user){
+      let err=document.getElementById("loginError");
+      if(!err){ err=document.createElement("div"); err.id="loginError"; err.style="color:var(--red);font-size:12px;margin-top:10px"; document.getElementById("loginForm").appendChild(err); }
+      err.textContent="Identifiant ou mot de passe incorrect.";
+      return;
+    }
+    setSession(user); location.reload();
+  });
+}
+function roleLabel(){ return isController() ? "Contrôleur matériel" : "Visiteur"; }
+function canAccessView(view){ return isController() || ["dashboard","saisie","situation"].includes(view) || view==="export"; }
 
 /* ---------- Storage helpers ---------- */
 function normalizeEntries(list){
@@ -524,18 +619,25 @@ function filteredSituation(){
 
 /* ---------- Rendering ---------- */
 function render(){
+  if(!currentUser){ renderLogin(); return; }
+  if(!canAccessView(state.view)) state.view="dashboard";
   renderHeaderChips();
   renderTabbar();
   const main = document.getElementById("main");
   if(state.view === "dashboard") main.innerHTML = viewDashboard();
   else if(state.view === "saisie") main.innerHTML = viewSaisie();
   else if(state.view === "situation") main.innerHTML = viewSituation();
+  else if(state.view === "pilotage") main.innerHTML = viewPilotage();
+  else if(state.view === "users") main.innerHTML = viewUsers();
   else if(state.view === "export") main.innerHTML = viewExport();
   attachViewHandlers();
 }
 
 function renderHeaderChips(){
-  const latest = latestPerWagon(entries);
+  const chipUser = document.getElementById("currentUserChip");
+  if(chipUser) chipUser.innerHTML = `${esc(currentUser.name)} <span class="role-pill">${esc(roleLabel())}</span>`;
+  document.getElementById("logoutBtn")?.addEventListener("click",()=>{ clearSession(); location.reload(); });
+  const latest = isVisitor() ? latestPerWagon(entries).filter(e=>e.visitor===currentUser.username) : latestPerWagon(entries);
   const counts = {};
   STATUSES.forEach(s => counts[s] = 0);
   latest.forEach(e => { if(counts[e.status] !== undefined) counts[e.status]++; });
@@ -551,6 +653,8 @@ function renderHeaderChips(){
 
 function renderTabbar(){
   document.querySelectorAll("#tabbar button").forEach(b => {
+    const controllerOnly = b.hasAttribute("data-controller-only");
+    b.style.display = controllerOnly && !isController() ? "none" : "flex";
     b.classList.toggle("active", b.dataset.view === state.view);
   });
 }
@@ -620,7 +724,23 @@ function dashboardLatest(){
   }
   return rows;
 }
+function viewVisitorHome(){
+  const mine=latestPerWagon(entries).filter(e=>e.visitor===currentUser.username);
+  const counts={}; STATUSES.forEach(x=>counts[x]=0); mine.forEach(e=>{if(counts[e.status]!==undefined) counts[e.status]++;});
+  const recent=entries.filter(e=>!e.cancelled_at && e.visitor===currentUser.username).slice(-5).reverse();
+  return `<div class="card"><h2 class="section-title">Bonjour, ${esc(currentUser.name)}</h2><div class="v10-user-meta">Site affecté : ${esc(currentUser.site)}</div></div>
+  <div class="simple-home">
+    <button class="simple-action" data-go="saisie"><strong>＋ Nouvelle saisie</strong><span>Enregistrer rapidement la situation d'un wagon</span></button>
+    <button class="simple-action" data-go="situation"><strong>🔎 Rechercher un wagon</strong><span>Consulter la situation et l'historique</span></button>
+  </div>
+  <div class="card" style="margin-top:12px"><h2 class="section-title">Mes saisies</h2>
+    <div class="stat-grid"><div class="stat-box"><div class="num">${mine.length}</div><div class="lab">Wagons suivis</div></div><div class="stat-box"><div class="num">${counts["Immobilisé"]+counts["En réparation"]+counts["En attente"]}</div><div class="lab">Non disponibles</div></div></div>
+    ${recent.length?recent.map(e=>`<div class="v10-user-row" style="padding:7px 0;border-top:1px solid var(--border)"><span><strong>${esc(e.wagon)}</strong><br><span class="v10-user-meta">${esc(e.site)} · ${esc(e.status)}</span></span><span class="role-pill">${esc(e.motif||"Aucune")}</span></div>`).join(""):"<div class=\"attention-empty\">Aucune saisie pour le moment.</div>"}
+  </div>`;
+}
+
 function viewDashboard(){
+  if(isVisitor()) return viewVisitorHome();
   if(!storageOk){
     return bannerHTML() + `<div class="empty"><div class="big">⚠️</div><p>Impossible de charger les données pour le moment.</p></div>`;
   }
@@ -843,8 +963,7 @@ function viewSaisie(){
         <label>Observation</label>
         <textarea name="observation" placeholder="Remarque, levée officielle, acheminement..."></textarea>
 
-        <label>Agent / visiteur</label>
-        <input type="text" name="visitor" placeholder="Nom de l'agent">
+        <div class="v10-user-meta" style="margin-top:12px">Saisie enregistrée sous le compte : <strong>${esc(currentUser.name)}</strong></div>
 
         <button class="btn" type="submit">Enregistrer</button>
       </form>
@@ -894,6 +1013,19 @@ function wagonCardHTML(e){
       </div>
     </div>
   `;
+}
+
+function viewPilotage(){
+  if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
+  return `<div class="card"><h2 class="section-title">Pilotage du parc FRET</h2><p class="v9-note">Cette vue est réservée au compte Contrôleur matériel. Elle reprend les indicateurs avancés de la V9 sans les afficher aux visiteurs.</p></div>${viewDashboard()}`;
+}
+function viewUsers(){
+  if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
+  const users=loadUsers();
+  return `<div class="card"><h2 class="section-title">Comptes visiteurs</h2>
+    <form id="userForm"><label>Nom du visiteur</label><input name="name" required placeholder="Visiteur 03"><label>Identifiant</label><input name="username" required placeholder="visiteur03"><label>Mot de passe</label><input name="password" required value="1234"><label>Site</label><select name="site">${SITES.map(x=>`<option>${esc(x)}</option>`).join("")}</select><button class="btn" type="submit">＋ Créer le compte</button></form></div>
+    <div class="card"><h2 class="section-title">Utilisateurs</h2><div class="user-list">${users.map(u=>`<div class="user-item"><div class="top"><strong>${esc(u.name)}</strong><span class="role-pill">${u.role==="controller"?"Contrôleur":"Visiteur"}</span></div><small>${esc(u.username)} · ${esc(u.site)}</small>${u.role!=="controller"?`<button class="danger-btn" data-disable-user="${esc(u.id)}">Désactiver</button>`:""}</div>`).join("")}</div></div>
+    <div class="card"><h2 class="section-title">Stockage pilote</h2><div class="cloud-note"><strong>OneDrive personnel :</strong> pour ce pilote, l'application garde les données localement. Tu peux exporter la mémoire JSON puis la déposer manuellement dans ton OneDrive. La synchronisation automatique nécessite une autorisation Microsoft/API qui n'est pas encore configurée.</div><a class="btn secondary cloud-link" href="https://onedrive.live.com/" target="_blank" rel="noopener">Ouvrir OneDrive</a></div>`;
 }
 
 function viewExport(){
@@ -1007,6 +1139,28 @@ function downloadCSV(content, filename){
 }
 
 /* ---------- Event handlers ---------- */
+function attachV10Handlers(){
+  document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>{state.view=b.dataset.go;render();}));
+  if(isVisitor()){
+    const form=document.getElementById("saisieForm");
+    const site=form?.querySelector('select[name="site"]');
+    if(site){ site.value=currentUser.site; site.disabled=true; }
+  }
+  if(state.view==="users" && isController()){
+    const form=document.getElementById("userForm");
+    form?.addEventListener("submit",ev=>{
+      ev.preventDefault(); const fd=new FormData(form); const users=loadUsers();
+      const username=String(fd.get("username")||"").trim();
+      if(!username || users.some(u=>u.username===username)){showToast("Identifiant déjà utilisé");return;}
+      users.push({id:"vis-"+uid(),username,name:String(fd.get("name")||"").trim(),role:"visitor",site:fd.get("site"),password:String(fd.get("password")||"1234")});
+      saveUsers(users); showToast("Compte visiteur créé"); render();
+    });
+    document.querySelectorAll("[data-disable-user]").forEach(btn=>btn.addEventListener("click",()=>{
+      const users=loadUsers().filter(u=>u.id!==btn.dataset.disableUser); saveUsers(users); showToast("Compte désactivé"); render();
+    }));
+  }
+}
+
 function attachViewHandlers(){
   if(state.view === "dashboard"){
     document.querySelectorAll("[data-dash-site]").forEach(btn => btn.addEventListener("click", () => { state.dashboardSite = btn.dataset.dashSite; render(); }));
@@ -1045,14 +1199,14 @@ function attachViewHandlers(){
         seq: nextSeq,
         record_version: 1,
         week: fd.get("week").trim(),
-        site: fd.get("site"),
+        site: isVisitor() ? currentUser.site : fd.get("site"),
         wagon,
         serie: fd.get("serie"),
         status: fd.get("status"),
         motif: fd.get("motif"),
         isolation: fd.get("isolation"),
         observation: fd.get("observation").trim(),
-        visitor: fd.get("visitor").trim(),
+        visitor: currentUser.username,
         created_at: new Date().toISOString()
       };
       if(!entry.site){ showToast("Merci de choisir un site"); return; }
@@ -1176,17 +1330,20 @@ function attachViewHandlers(){
       render();
     });
   }
+  attachV10Handlers();
 }
 
 document.getElementById("tabbar").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-view]");
-  if(!btn) return;
+  if(!btn || (btn.hasAttribute("data-controller-only") && !isController())) return;
   state.view = btn.dataset.view;
   render();
 });
 
 /* ---------- Init ---------- */
 (async function init(){
+  loadUsers();
+  if(!ensureSession()){ renderLogin(); return; }
   document.getElementById("main").innerHTML = `<div class="loading-row">Chargement des données…</div>`;
   await loadEntries();
   render();
