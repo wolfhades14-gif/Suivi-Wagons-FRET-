@@ -889,32 +889,6 @@ function viewDashboard(){
     </div>
     ${statBoxes}
     <div class="card">
-      <h2 class="section-title">Résultats opérationnels</h2>
-      <div class="v9-overview">
-        <div class="v9-panel">
-          <div class="v9-title">Remis à disposition · ce mois</div>
-          <b>${(()=>{ const now=new Date(); const y=now.getFullYear(), m=now.getMonth(); return statusTransitionEntries("Disponible").filter(e=>{const d=new Date(e.created_at); return d.getFullYear()===y && d.getMonth()===m;}).length; })()}</b>
-          <small>Wagons enregistrés comme « Disponible » pendant le mois en cours.</small>
-        </div>
-        <div class="v9-panel">
-          <div class="v9-title">Réformés / non disponibles</div>
-          <b>${reformPendingRows(latest).length}</b>
-          <small>Réforme maintenue jusqu'à une saisie « Disponible ».</small>
-        </div>
-      </div>
-      <p class="v9-note">La réforme est un état métier persistant. Un wagon peut donc être « En réparation » tout en restant compté dans les « Réformés / non disponibles ».</p>
-    </div>
-    <div class="card">
-      <h2 class="section-title">État du traitement</h2>
-      <div class="treatment-grid">
-        <div><b>${latest.filter(e=>e.status==="Réformé" || e.status==="Immobilisé").length}</b><span>À traiter</span></div>
-        <div><b>${latest.filter(e=>e.status==="En réparation").length}</b><span>En cours</span></div>
-        <div><b>${latest.filter(e=>e.status==="En attente").length}</b><span>En attente d'action</span></div>
-        <div><b>${latest.filter(e=>e.status==="Disponible").length}</b><span>Traité / disponible</span></div>
-      </div>
-      <p class="v9-note">Cette lecture décrit l'étape de traitement actuelle. Elle est indépendante du marqueur « Réformé / non disponible ».</p>
-    </div>
-    <div class="card">
       <h2 class="section-title">Indicateurs de la semaine · ${esc(currentWeek)}</h2>
       <div class="kpi-grid">
         <div><b>${weekEntries.length}</b><span>Saisies</span></div>
@@ -924,24 +898,7 @@ function viewDashboard(){
       </div>
     </div>
     <div class="card">
-      <h2 class="section-title">Statut de réforme</h2>
-      <div class="quick-grid">
-        <div><span>Wagons encore comptés réformés</span><b>${reformPending.length}</b></div>
-        <div><span>Wagons disponibles</span><b>${allLatest.filter(e=>e.status === "Disponible").length}</b></div>
-      </div>
-      <p class="help-text">Un wagon marqué « Réformé » reste compté comme réformé tant qu'une saisie ultérieure ne le déclare pas « Disponible », même s'il passe entre-temps par « Immobilisé », « En réparation » ou « En attente ».</p>
-    </div>
-    <div class="card">
-      <h2 class="section-title">Ancienneté des situations en cours</h2>
-      <div class="aging-grid">
-        <div><b>${aged[0]}</b><span>≥ 7 jours</span></div>
-        <div><b>${aged[1]}</b><span>≥ 15 jours</span></div>
-        <div><b>${aged[2]}</b><span>≥ 30 jours</span></div>
-      </div>
-      <p class="help-text">Calcul basé sur le début de l’épisode continu. Ce sont des seuils de pilotage, pas des seuils réglementaires.</p>
-    </div>
-    <div class="card">
-      <h2 class="section-title">Wagons en cours · ancienneté réelle</h2>
+      <h2 class="section-title">Wagons en cours · ancienneté & priorités</h2>
       <div class="muted-small">L'ancienneté correspond au début de l'épisode continu d'immobilisation (Immobilisé / En réparation / En attente), et non à la dernière saisie.</div>
       <div class="age-summary">
         <div><b>${aged[0]}</b><span>≥ 7 jours</span></div>
