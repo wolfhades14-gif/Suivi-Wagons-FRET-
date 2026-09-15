@@ -500,7 +500,7 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 12;
+const STORAGE_VERSION = 13;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 
@@ -684,13 +684,17 @@ function reformPendingRows(list = latestPerWagon(entries)){
 }
 function filteredSituation(){
   let latest = latestPerWagon(entries);
+  const query = state.search.trim();
   if(isVisitor()){
-    // Visitor scope: only the assigned site. This keeps the interface operationally simple.
-    latest = latest.filter(e => e.site === currentUser.site);
+    // Visitor: the normal situation remains limited to the assigned site.
+    // When a wagon number is searched, the search becomes global so a visitor
+    // can locate a wagon that is currently followed at another site (for example
+    // a wagon reformed at Selouane while the visitor is at Beni Ansar).
+    if(!query) latest = latest.filter(e => e.site === currentUser.site);
   } else if(state.filterSite !== "Tous") {
     latest = latest.filter(e => e.site === state.filterSite);
   }
-  if(state.search) latest = latest.filter(e => e.wagon.includes(state.search.trim()));
+  if(query) latest = latest.filter(e => e.wagon.includes(query));
   latest.sort((a,b) => a.site.localeCompare(b.site) || a.wagon.localeCompare(b.wagon));
   return latest;
 }
@@ -1026,7 +1030,7 @@ function viewSituation(){
       <input type="tel" inputmode="numeric" id="searchInput" placeholder="Rechercher un numéro de wagon" value="${esc(state.search)}">
     </div>
     ${isVisitor()
-      ? `<div class="site-scope-note">Site : <strong>${esc(currentUser.site)}</strong></div>`
+      ? `<div class="site-scope-note">Situation : <strong>${esc(currentUser.site)}</strong> · Recherche wagon : tous les sites</div>`
       : `<div class="site-filter" id="siteFilter">${chips}</div>`}
     ${list}
   `;
