@@ -500,7 +500,7 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 13;
+const STORAGE_VERSION = 14;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 
@@ -842,12 +842,10 @@ function viewDashboard(){
   const newImmobilisations = statusTransitionEntries("Immobilisé", currentWeek).length;
   const released = statusTransitionEntries("Disponible", currentWeek).length;
   const reformes = statusTransitionEntries("Réformé", currentWeek).length;
-  const isoled = latest.filter(e => e.isolation && e.isolation !== "Aucun").length;
 
   const currentProblems = latest.filter(e => problemStatus(e.status));
   const ages = currentProblems.map(e => ({ entry:e, start:currentEpisodeStart(e), days:episodeAgeDays(e) ?? 0 }));
   const aged = [7,15,30].map(n => ages.filter(x => x.days >= n).length);
-  const rate = allLatest.length ? Math.round((allLatest.filter(e=>e.status==="Disponible").length / allLatest.length)*100) : 0;
 
   const statBoxes = `
     <div class="stat-grid v6-stats">
@@ -880,9 +878,18 @@ function viewDashboard(){
   const weeks=[];
   const now=new Date();
   for(let i=5;i>=0;i--){ const d=new Date(now); d.setDate(d.getDate()-i*7); const w=isoWeekFromDate(d); weeks.push(w); }
-  const weekly = weeks.map(w=>({w, total:activeEntries().filter(e=>e.week===w).length, imm:activeEntries().filter(e=>e.week===w && e.status==="Immobilisé").length}));
-  const maxWeek=Math.max(1,...weekly.map(x=>x.total));
-  const weeklyHtml=weekly.map(x=>`<div class="week-row"><div class="week-label">${esc(x.w)}</div><div class="week-track"><div class="week-fill" style="width:${Math.max(4,x.total/maxWeek*100)}%"></div></div><div class="week-num">${x.total}</div><div class="week-imm">${x.imm} imm.</div></div>`).join("");
+  const weekly = weeks.map(w=>({
+    w,
+    imm:statusTransitionEntries("Immobilisé", w).length,
+    dispo:statusTransitionEntries("Disponible", w).length,
+    reforme:statusTransitionEntries("Réformé", w).length
+  }));
+  const weeklyHtml=weekly.map(x=>`<div class="week-row" style="grid-template-columns:72px 1fr 1fr 1fr;gap:8px;align-items:center;">
+    <div class="week-label">${esc(x.w)}</div>
+    <div class="week-num" style="text-align:center;"><b>${x.imm}</b><div class="muted-small">imm.</div></div>
+    <div class="week-num" style="text-align:center;"><b>${x.dispo}</b><div class="muted-small">dispo.</div></div>
+    <div class="week-num" style="text-align:center;"><b>${x.reforme}</b><div class="muted-small">réf.</div></div>
+  </div>`).join("");
 
   return `
     <div class="card v6-filter-card">
@@ -948,16 +955,12 @@ function viewDashboard(){
       ${motifHtml}
     </div>
     <div class="card">
-      <h2 class="section-title">Activité des 6 dernières semaines</h2>
-      ${weeklyHtml}
-      <div class="legend-small">Nombre de saisies · « imm. » = saisies avec situation Immobilisé</div>
-    </div>
-    <div class="card">
-      <h2 class="section-title">Lecture rapide</h2>
-      <div class="quick-grid">
-        <div><span>Taux de wagons actuellement disponibles</span><b>${rate}%</b></div>
-        <div><span>Wagons sous étiquette mod.</span><b>${isoled}</b></div>
+      <h2 class="section-title">Mouvements opérationnels · 6 dernières semaines</h2>
+      <div class="week-row" style="grid-template-columns:72px 1fr 1fr 1fr;gap:8px;align-items:center;border-bottom:1px solid #e5ebf0;padding-bottom:6px;margin-bottom:4px;">
+        <div class="muted-small">Semaine</div><div class="muted-small" style="text-align:center;">Immobilisés</div><div class="muted-small" style="text-align:center;">Disponibles</div><div class="muted-small" style="text-align:center;">Réformés</div>
       </div>
+      ${weeklyHtml}
+      <div class="legend-small">Transitions enregistrées dans l'application. Les saisies intermédiaires ne sont pas comptées comme indicateur.</div>
     </div>
   `;
 }
