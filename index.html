@@ -437,10 +437,10 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
 .treatment-grid>div{border:none;text-align:center;background:#F5F8FA}
 @media(max-width:430px){.header-user-row{align-items:flex-start}.header-user-row h1{font-size:25px}.chips-row{gap:7px}.chip-stat{padding:9px 7px}.chip-stat .n{font-size:23px}.chip-stat .l{font-size:10.5px}.main-kpi{min-height:122px;padding:14px}.main-kpi .num{font-size:32px}.main-kpi .lab{font-size:16px}.main-kpi .sub{font-size:11px}.treatment-grid{grid-template-columns:1fr 1fr 1fr}}
 
-@media(max-width:430px){header.top{padding:14px 12px 10px}.brand-train{width:44px;height:54px;flex-basis:44px}.brand-train svg{width:44px;height:44px}.brand-line{gap:7px}.brand-line h1{font-size:24px}.brand-line p{font-size:12.5px}.header-right{gap:6px}.oncf-mark{display:none}.logout-btn{padding:8px 10px;font-size:11px}.header-user-row .user-chip{margin-left:51px;margin-top:6px}.chips-row{gap:6px;margin-top:11px}.chip-stat{min-height:60px;padding:8px 7px}.chip-stat .n{font-size:21px}.chip-stat .l{font-size:10px}.main-kpi .kpi-icon{left:12px;top:12px;width:36px;height:36px;font-size:22px}.main-kpi .num,.main-kpi .lab,.main-kpi .sub{margin-left:46px}}
+@media(max-width:430px){header.top{padding:14px 12px 10px}.brand-train{width:44px;height:54px;flex-basis:44px}.brand-train svg{width:44px;height:44px}.brand-line{gap:7px}.brand-line h1{font-size:24px}.brand-line p{font-size:12.5px}.header-right{gap:6px}.oncf-mark{display:none}.logout-btn{padding:8px 10px;font-size:11px}.header-role{margin-left:51px;margin-top:6px}.chips-row{gap:6px;margin-top:11px}.chip-stat{min-height:60px;padding:8px 7px}.chip-stat .n{font-size:21px}.chip-stat .l{font-size:10px}.main-kpi .kpi-icon{left:12px;top:12px;width:36px;height:36px;font-size:22px}.main-kpi .num,.main-kpi .lab,.main-kpi .sub{margin-left:46px}}
 
 <style>
-/* V12.2 — alignement fin avec la maquette mobile */
+/* V12.3 — alignement fin avec la maquette mobile */
 .chips-row{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:15px;overflow:visible;padding:0}
 .chip-stat{position:relative;min-width:0;border:0;border-radius:16px;padding:12px 10px 10px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.16);color:#fff;min-height:70px}
 .chip-stat .n{display:block;font-size:30px;font-weight:850;line-height:1;margin-bottom:7px;color:#fff}
@@ -450,7 +450,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
 .header-user-row{align-items:flex-start}
 .brand-block{min-width:0}
 .brand-line h1{white-space:nowrap}
-.header-user-row .user-chip{margin-left:66px}
+.header-role{margin-left:66px}
 @media(max-width:430px){
   header.top{padding:13px 10px 12px}
   .header-user-row{gap:7px}
@@ -462,7 +462,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
   .header-right{gap:5px}
   .oncf-mark{display:none}
   .logout-btn{padding:8px 9px;font-size:10.5px}
-  .header-user-row .user-chip{margin-left:49px;margin-top:6px}
+  .header-role{margin-left:49px;margin-top:6px}
   .role-pill{padding:4px 9px}
   .chips-row{gap:7px;margin-top:12px}
   .chip-stat{min-height:65px;padding:10px 7px 8px;border-radius:15px}
@@ -486,7 +486,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
             <p>Beni Ansar, Selouane et Hassi Blal</p>
           </div>
         </div>
-        <div class="user-chip" id="currentUserChip"></div>
+        <div id="currentUserChip" class="header-role"></div>
       </div>
       <div class="header-right">
         <div class="oncf-mark"><strong>ONCF</strong><span>Ensemble pour un parc performant</span></div>
@@ -566,7 +566,7 @@ let entries = [];
 let storageOk = true;
 let lastSavedAt = null;
 let currentUser = null;
-let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null, dashboardSite: "Tous", dashboardStatus: "Tous" };
+let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null, dashboardSite: "Tous", dashboardStatus: "Tous", prefillWagon: null, prefillEntryId: null };
 
 // V4: append-only local history. Every submission gets its own record and is never overwritten.
 // The old key is retained so existing pilot data remains available after the upgrade.
@@ -1018,6 +1018,59 @@ function viewDashboard(){
   `;
 }
 
+function viewSaisie(){
+  const prefill = state.prefillWagon ? historyForWagon(state.prefillWagon).slice(-1)[0] : null;
+  const selectedSite = isVisitor() ? currentUser.site : (prefill?.site || "");
+  const selectedSerie = prefill?.serie || (state.prefillWagon ? serieFromWagon(state.prefillWagon) : null) || SERIES[0];
+  return `
+    <div class="card">
+      <h2 class="section-title">${prefill ? "Modifier la situation du wagon" : "Nouvelle saisie"}</h2>
+      ${prefill ? `<div class="help-text">Wagon <strong>${esc(prefill.wagon)}</strong> · Une nouvelle saisie sera ajoutée à l'historique sans supprimer l'ancienne.</div>` : ""}
+      <form id="saisieForm">
+        <label>Semaine</label>
+        <input type="text" name="week" value="${esc(isoWeekDefault())}" required>
+
+        <label>Site</label>
+        <select name="site" required ${isVisitor() ? "disabled" : ""}>
+          <option value="">Choisir un site</option>
+          ${SITES.map(site => `<option value="${esc(site)}" ${site===selectedSite?'selected':''}>${esc(site)}</option>`).join("")}
+        </select>
+
+        <label>Numéro de wagon</label>
+        <input type="tel" name="wagon" inputmode="numeric" maxlength="7" placeholder="7 chiffres" value="${esc(prefill?.wagon || state.prefillWagon || "")}" required>
+        <div class="field-error" id="wagonError">Le numéro doit contenir exactement 7 chiffres.</div>
+
+        <label>Série</label>
+        <select name="serie">
+          ${SERIES.map(serie => `<option value="${esc(serie)}" ${serie===selectedSerie?'selected':''}>${esc(serie)}</option>`).join("")}
+        </select>
+
+        <label>Situation</label>
+        <select name="status" required>
+          ${STATUSES.map(status => `<option value="${esc(status)}" ${status===(prefill?.status || "Immobilisé")?'selected':''}>${esc(status)}</option>`).join("")}
+        </select>
+
+        <label>Motif / anomalie</label>
+        <select name="motif">
+          ${MOTIFS.map(motif => `<option value="${esc(motif)}" ${motif===(prefill?.motif || "Aucune")?'selected':''}>${esc(motif)}</option>`).join("")}
+        </select>
+
+        <label>Étiquette mod:</label>
+        <select name="isolation">
+          ${ISOLATION_CODES.map(code => `<option value="${esc(code)}" ${code===(prefill?.isolation || "Aucun")?'selected':''}>${esc(code)}</option>`).join("")}
+        </select>
+
+        <label>Observation</label>
+        <textarea name="observation" placeholder="Remarque, levée officielle, acheminement...">${esc(prefill?.observation || "")}</textarea>
+
+        <div class="v10-user-meta" style="margin-top:12px">Saisie enregistrée sous le compte : <strong>${esc(currentUser.name)}</strong></div>
+        <button class="btn" type="submit">${prefill ? "Enregistrer la nouvelle situation" : "Enregistrer"}</button>
+        ${prefill ? `<button class="btn secondary" type="button" id="cancelEdit">Annuler</button>` : ""}
+      </form>
+    </div>
+  `;
+}
+
 function viewSituation(){
   const rows = filteredSituation();
   const chips = ["Tous", ...SITES].map(s => `
@@ -1059,6 +1112,10 @@ function wagonCardHTML(e){
         </div>
         ${e.observation ? `<div class="card-obs">${esc(e.observation)}</div>` : ""}
         <div class="card-foot">${esc(e.visitor || "Agent non renseigné")} · ${fmtDateTime(e.created_at)}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn secondary wagon-history-btn" type="button" data-wagon-action="history" data-wagon="${esc(e.wagon)}">Historique</button>
+          ${(!isVisitor() || e.site===currentUser.site) ? `<button class="btn wagon-edit-btn" type="button" data-wagon-action="edit" data-wagon="${esc(e.wagon)}">Modifier la situation</button>` : ""}
+        </div>
       </div>
     </div>
   `;
@@ -1362,6 +1419,7 @@ function attachViewHandlers(){
   }
   if(state.view === "saisie"){
     const form = document.getElementById("saisieForm");
+    if(!form) return;
     const wagonInput = form.querySelector('input[name="wagon"]');
     const serieSelect = form.querySelector('select[name="serie"]');
     let serieAutoSet = false; // tracks whether the current value was set automatically
@@ -1412,6 +1470,14 @@ function attachViewHandlers(){
         showToast("Échec de l'enregistrement, réessayez");
         entries.pop();
       }
+      state.prefillWagon = null;
+      state.prefillEntryId = null;
+      render();
+    });
+    document.getElementById("cancelEdit")?.addEventListener("click", () => {
+      state.prefillWagon = null;
+      state.prefillEntryId = null;
+      state.view = "situation";
       render();
     });
   }
@@ -1432,8 +1498,18 @@ function attachViewHandlers(){
       render();
     });
     document.querySelectorAll(".wagon-card").forEach(card => {
-      card.addEventListener("click", () => openHistory(card.dataset.wagon));
+      card.addEventListener("click", (ev) => {
+        if(ev.target.closest("button")) return;
+        openHistory(card.dataset.wagon);
+      });
     });
+    document.querySelectorAll("[data-wagon-action=history]").forEach(btn => btn.addEventListener("click", () => openHistory(btn.dataset.wagon)));
+    document.querySelectorAll("[data-wagon-action=edit]").forEach(btn => btn.addEventListener("click", () => {
+      state.prefillWagon = btn.dataset.wagon;
+      state.prefillEntryId = historyForWagon(btn.dataset.wagon).slice(-1)[0]?.id || null;
+      state.view = "saisie";
+      render();
+    }));
   }
 
   if(state.view === "export" && isController()){
