@@ -438,6 +438,39 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
 @media(max-width:430px){.header-user-row{align-items:flex-start}.header-user-row h1{font-size:25px}.chips-row{gap:7px}.chip-stat{padding:9px 7px}.chip-stat .n{font-size:23px}.chip-stat .l{font-size:10.5px}.main-kpi{min-height:122px;padding:14px}.main-kpi .num{font-size:32px}.main-kpi .lab{font-size:16px}.main-kpi .sub{font-size:11px}.treatment-grid{grid-template-columns:1fr 1fr 1fr}}
 
 @media(max-width:430px){header.top{padding:14px 12px 10px}.brand-train{width:44px;height:54px;flex-basis:44px}.brand-train svg{width:44px;height:44px}.brand-line{gap:7px}.brand-line h1{font-size:24px}.brand-line p{font-size:12.5px}.header-right{gap:6px}.oncf-mark{display:none}.logout-btn{padding:8px 10px;font-size:11px}.header-user-row .user-chip{margin-left:51px;margin-top:6px}.chips-row{gap:6px;margin-top:11px}.chip-stat{min-height:60px;padding:8px 7px}.chip-stat .n{font-size:21px}.chip-stat .l{font-size:10px}.main-kpi .kpi-icon{left:12px;top:12px;width:36px;height:36px;font-size:22px}.main-kpi .num,.main-kpi .lab,.main-kpi .sub{margin-left:46px}}
+
+<style>
+/* V12.2 — alignement fin avec la maquette mobile */
+.chips-row{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:15px;overflow:visible;padding:0}
+.chip-stat{position:relative;min-width:0;border:0;border-radius:16px;padding:12px 10px 10px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.16);color:#fff;min-height:70px}
+.chip-stat .n{display:block;font-size:30px;font-weight:850;line-height:1;margin-bottom:7px;color:#fff}
+.chip-stat .l{display:block;font-size:12px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip-icon{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900}
+.chip-stat.dispo .chip-icon{color:#16A765}.chip-stat.immobilise .chip-icon{color:#E94B55}.chip-stat.repar .chip-icon{color:#FFB71B}.chip-stat.attente .chip-icon{color:#2F8DDF}
+.header-user-row{align-items:flex-start}
+.brand-block{min-width:0}
+.brand-line h1{white-space:nowrap}
+.header-user-row .user-chip{margin-left:66px}
+@media(max-width:430px){
+  header.top{padding:13px 10px 12px}
+  .header-user-row{gap:7px}
+  .brand-train{width:43px;height:52px;flex-basis:43px}
+  .brand-train svg{width:43px;height:43px}
+  .brand-line{gap:6px}
+  .brand-line h1{font-size:23px;letter-spacing:-.04em}
+  .brand-line p{font-size:12px}
+  .header-right{gap:5px}
+  .oncf-mark{display:none}
+  .logout-btn{padding:8px 9px;font-size:10.5px}
+  .header-user-row .user-chip{margin-left:49px;margin-top:6px}
+  .role-pill{padding:4px 9px}
+  .chips-row{gap:7px;margin-top:12px}
+  .chip-stat{min-height:65px;padding:10px 7px 8px;border-radius:15px}
+  .chip-stat .n{font-size:25px;margin-bottom:6px}
+  .chip-stat .l{font-size:10px}
+  .chip-icon{width:25px;height:25px;right:7px;top:7px;font-size:15px}
+}
+</style>
 </style>
 </head>
 <body>
@@ -757,7 +790,7 @@ function render(){
 
 function renderHeaderChips(){
   const chipUser = document.getElementById("currentUserChip");
-  if(chipUser) chipUser.innerHTML = `${esc(currentUser.name)} <span class="role-pill">${esc(roleLabel())}</span>`;
+  if(chipUser) chipUser.innerHTML = `<span class="role-pill">${esc(roleLabel())}</span>`;
   document.getElementById("logoutBtn")?.addEventListener("click",()=>{ clearSession(); location.reload(); });
   const latest = isVisitor() ? latestPerWagon(entries).filter(e=>e.visitor===currentUser.username) : latestPerWagon(entries);
   const counts = {};
@@ -769,13 +802,14 @@ function renderHeaderChips(){
   const immobilizedTotal = counts["Immobilisé"] + reformesPersistantes;
   const el = document.getElementById("headerChips");
   const chips = [
-    ["Disponible", counts["Disponible"]],
-    ["Immobilisés", immobilizedTotal],
-    ["En réparation", counts["En réparation"]],
-    ["En attente", counts["En attente"]]
+    ["Disponible", counts["Disponible"], "✓", "dispo"],
+    ["Immobilisés", immobilizedTotal, "⊘", "immobilise"],
+    ["En réparation", counts["En réparation"], "⚒", "repar"],
+    ["En attente", counts["En attente"], "◷", "attente"]
   ];
-  el.innerHTML = chips.map(([label,n]) => `
-    <div class="chip-stat">
+  el.innerHTML = chips.map(([label,n,icon,kind]) => `
+    <div class="chip-stat ${kind}">
+      <span class="chip-icon">${icon}</span>
       <span class="n">${n}</span>
       <span class="l">${label}</span>
     </div>`).join("");
