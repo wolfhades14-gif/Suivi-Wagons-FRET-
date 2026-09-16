@@ -440,7 +440,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
 @media(max-width:430px){header.top{padding:14px 12px 10px}.brand-train{width:44px;height:54px;flex-basis:44px}.brand-train svg{width:44px;height:44px}.brand-line{gap:7px}.brand-line h1{font-size:24px}.brand-line p{font-size:12.5px}.header-right{gap:6px}.oncf-mark{display:none}.logout-btn{padding:8px 10px;font-size:11px}.header-role{margin-left:51px;margin-top:6px}.chips-row{gap:6px;margin-top:11px}.chip-stat{min-height:60px;padding:8px 7px}.chip-stat .n{font-size:21px}.chip-stat .l{font-size:10px}.main-kpi .kpi-icon{left:12px;top:12px;width:36px;height:36px;font-size:22px}.main-kpi .num,.main-kpi .lab,.main-kpi .sub{margin-left:46px}}
 
 <style>
-/* V12.3 — alignement fin avec la maquette mobile */
+/* V12.4 — alignement fin avec la maquette mobile */
 .chips-row{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:15px;overflow:visible;padding:0}
 .chip-stat{position:relative;min-width:0;border:0;border-radius:16px;padding:12px 10px 10px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.16);color:#fff;min-height:70px}
 .chip-stat .n{display:block;font-size:30px;font-weight:850;line-height:1;margin-bottom:7px;color:#fff}
@@ -471,6 +471,11 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
   .chip-icon{width:25px;height:25px;right:7px;top:7px;font-size:15px}
 }
 </style>
+<style>
+/* V12.4 final corrections */
+.header-role{margin-left:49px;margin-top:7px;display:block;min-height:30px}
+.header-role .role-pill{display:inline-flex;align-items:center;justify-content:center;border-radius:18px;padding:7px 15px;background:#EAF5FB;color:#244D70;font-size:12px;font-weight:650;line-height:1.1}
+@media(max-width:430px){.header-role{margin-left:49px;margin-top:6px}.header-role .role-pill{padding:6px 13px;font-size:12px}}
 </style>
 </head>
 <body>
@@ -486,7 +491,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
             <p>Beni Ansar, Selouane et Hassi Blal</p>
           </div>
         </div>
-        <div id="currentUserChip" class="header-role"></div>
+        <div class="header-role"><span id="currentUserRole" class="role-pill"></span></div>
       </div>
       <div class="header-right">
         <div class="oncf-mark"><strong>ONCF</strong><span>Ensemble pour un parc performant</span></div>
@@ -789,8 +794,8 @@ function render(){
 }
 
 function renderHeaderChips(){
-  const chipUser = document.getElementById("currentUserChip");
-  if(chipUser) chipUser.innerHTML = `<span class="role-pill">${esc(roleLabel())}</span>`;
+  const chipUser = document.getElementById("currentUserRole");
+  if(chipUser) chipUser.textContent = roleLabel();
   document.getElementById("logoutBtn")?.addEventListener("click",()=>{ clearSession(); location.reload(); });
   const latest = isVisitor() ? latestPerWagon(entries).filter(e=>e.visitor===currentUser.username) : latestPerWagon(entries);
   const counts = {};
@@ -1611,8 +1616,11 @@ function attachViewHandlers(){
 
 document.getElementById("tabbar").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-view]");
-  if(!btn || (btn.hasAttribute("data-controller-only") && !isController())) return;
+  if(!btn) return;
+  if((btn.hasAttribute("data-controller-only") || btn.hasAttribute("data-controller-dashboard")) && !isController()) return;
   state.view = btn.dataset.view;
+  state.prefillWagon = null;
+  state.prefillEntryId = null;
   render();
 });
 
