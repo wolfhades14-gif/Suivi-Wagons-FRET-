@@ -1,12 +1,12 @@
 {
   "name": "Suivi Wagons FRET",
   "short_name": "Wagons FRET",
-  "description": "Suivi des wagons FRET ONCF — pilotage et bilans.",
+  "description": "Suivi des wagons FRET ONCF — interface de pilotage mobile.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#EEF3F7",
-  "theme_color": "#15557D",
+  "theme_color": "#07527F",
   "icons": [
     {"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
     {"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
