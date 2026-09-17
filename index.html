@@ -580,7 +580,7 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 14;
+const STORAGE_VERSION = 15; // V12.7 defensive export correction
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 
@@ -1192,17 +1192,23 @@ function viewExport(){
     </div>`;
 }
 
+function entryDateKey(e){
+  const raw=e?.created_at || e?.createdAt || e?.date || e?.timestamp || "";
+  const d=new Date(raw);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0,10);
+}
 function reportRows(){
   const start=document.getElementById("reportStart")?.value||"";
   const end=document.getElementById("reportEnd")?.value||"";
   const site=document.getElementById("reportSite")?.value||"Tous";
   let rows=activeEntries();
-  if(start) rows=rows.filter(e=>e.created_at.slice(0,10)>=start);
-  if(end) rows=rows.filter(e=>e.created_at.slice(0,10)<=end);
+  if(start) rows=rows.filter(e=>entryDateKey(e) && entryDateKey(e)>=start);
+  if(end) rows=rows.filter(e=>entryDateKey(e) && entryDateKey(e)<=end);
   if(site!=="Tous") rows=rows.filter(e=>e.site===site);
   return {rows,start,end,site};
 }
 function reportSnapshot(){
+  // Defensive normalization for legacy records imported from earlier versions.
   const {rows,start,end,site}=reportRows();
   const all=latestPerWagon(entries).filter(e=>site==="Tous"||e.site===site);
   const inPeriod=latestPerWagon(rows);
@@ -1497,15 +1503,24 @@ function attachViewHandlers(){
   }
 
   if(state.view === "export" && isController()){
-    document.getElementById("generateReport")?.addEventListener("click", openReportPreview);
-    document.getElementById("exportKpiCsv")?.addEventListener("click", exportKpiCsv);
-    document.getElementById("exportStatsCsv")?.addEventListener("click", exportStatsCsv);
-    document.getElementById("exportExcel")?.addEventListener("click", exportReportExcel);
-    document.getElementById("exportWord")?.addEventListener("click", exportReportWord);
-    document.getElementById("printReport")?.addEventListener("click", printReport);
+    const runExportAction = (fn) => () => {
+      try { fn(); }
+      catch(err) {
+        console.error("Export error", err);
+        showToast("Erreur export : " + (err?.message || "données invalides"));
+        const box=document.getElementById("reportPreview");
+        if(box){ box.classList.remove("hidden"); box.innerHTML='<div class="report-preview-head"><strong>Erreur de génération</strong></div><p class="help-text">'+esc(String(err?.message || err))+'</p>'; }
+      }
+    };
+    document.getElementById("generateReport")?.addEventListener("click", runExportAction(openReportPreview));
+    document.getElementById("exportKpiCsv")?.addEventListener("click", runExportAction(exportKpiCsv));
+    document.getElementById("exportStatsCsv")?.addEventListener("click", runExportAction(exportStatsCsv));
+    document.getElementById("exportExcel")?.addEventListener("click", runExportAction(exportReportExcel));
+    document.getElementById("exportWord")?.addEventListener("click", runExportAction(exportReportWord));
+    document.getElementById("printReport")?.addEventListener("click", runExportAction(printReport));
     document.getElementById("exportCharts")?.addEventListener("click", ()=>{const r=reportSnapshot();const d=new Date().toISOString().slice(0,10);downloadSvg(svgActivity(r),`graphique_activite_wagons_fret_${d}.svg`);downloadSvg(svgSites(r),`graphique_sites_wagons_fret_${d}.svg`);downloadSvg(svgMotifs(r),`graphique_motifs_wagons_fret_${d}.svg`);showToast("3 graphiques SVG exportés");});
-    document.getElementById("exportSituation").addEventListener("click", () => {
-      const rows = latestPerWagon(entries).sort((a,b)=>a.site.localeCompare(b.site)||a.wagon.localeCompare(b.wagon));
+    document.getElementById("exportSituation")?.addEventListener("click", () => {
+      const rows = latestPerWagon(entries).sort((a,b)=>String(a.site||"").localeCompare(String(b.site||""))||String(a.wagon||"").localeCompare(String(b.wagon||"")));
       const csv = toCSV(rows,
         ["Wagon","Site","Série","Semaine","Situation","Réforme en cours","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
         r => [r.wagon,r.site,r.serie,r.week,r.status,isReformPending(r)?"Oui":"Non",r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
@@ -1513,8 +1528,8 @@ function attachViewHandlers(){
       downloadCSV(csv, "situation_actuelle_wagons_fret.csv");
     });
 
-    document.getElementById("exportHistorique").addEventListener("click", () => {
-      const rows = [...entries].sort((a,b)=>a.created_at.localeCompare(b.created_at));
+    document.getElementById("exportHistorique")?.addEventListener("click", () => {
+      const rows = [...entries].sort((a,b)=>entryDateKey(a).localeCompare(entryDateKey(b)));
       const csv = toCSV(rows,
         ["N° séquence","Identifiant","Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le","Annulée le","Motif annulation"],
         r => [r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at ? fmtDateTime(r.cancelled_at) : "",r.cancelled_reason]
@@ -1522,7 +1537,7 @@ function attachViewHandlers(){
       downloadCSV(csv, "historique_complet_wagons_fret.csv");
     });
 
-    document.getElementById("exportBackup").addEventListener("click", () => {
+    document.getElementById("exportBackup")?.addEventListener("click", () => {
       const backup = {
         app: "Suivi Wagons FRET",
         format: "suivi-wagons-fret-backup",

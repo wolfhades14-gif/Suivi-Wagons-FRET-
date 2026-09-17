@@ -1,4 +1,4 @@
-const CACHE_NAME = 'suivi-wagons-fret-v12-6';
+const CACHE_NAME = 'suivi-wagons-fret-v12-7';
 const APP_SHELL = [
   './',
   './index.html',
