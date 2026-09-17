@@ -1213,7 +1213,7 @@ function reportSnapshot(){
   const all=latestPerWagon(entries).filter(e=>site==="Tous"||e.site===site);
   const inPeriod=latestPerWagon(rows);
   const currentProblems=inPeriod.filter(e=>problemStatus(e.status));
-  const reforms=inPeriod.filter(e=>isReformPending(e)).length;
+  const reformes=inPeriod.filter(e=>isReformPending(e)).length;
   const anomalies=rows.filter(e=>e.motif && e.motif!=="Aucune").length;
   const resolved=rows.filter(e=>e.status==="Disponible").length;
   const bySite=SITES.map(s=>({site:s,wagons:all.filter(e=>e.site===s).length,imm:all.filter(e=>e.site===s&&e.status==="Immobilisé").length,repar:all.filter(e=>e.site===s&&e.status==="En réparation").length,attente:all.filter(e=>e.site===s&&e.status==="En attente").length,reforme:all.filter(e=>e.site===s&&isReformPending(e)).length})).filter(x=>site==="Tous"||x.site===site);
