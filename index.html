@@ -1137,9 +1137,12 @@ function viewPilotage(){
     const rows=allLatest.filter(e=>e.site===site);
     const problems=rows.filter(e=>problemStatus(e.status)).length;
     const reformes=rows.filter(e=>isReformPending(e)).length;
+    const nonDisponibles=rows.filter(e=>e.status!=="Disponible" || isReformPending(e)).length;
+    const reparations=rows.filter(e=>e.status==="En réparation").length;
+    const attentes=rows.filter(e=>e.status==="En attente").length;
     const oldest=rows.filter(e=>problemStatus(e.status)).map(e=>episodeAgeDays(e)??0);
     const maxAge=oldest.length?Math.max(...oldest):0;
-    return `<div class="metric-row"><div><b>${esc(site)}</b><div class="muted-small">${rows.length} suivis · ${problems} en cours · ${reformes} réformés · ancienneté max ${maxAge} j</div></div><strong>${problems}</strong></div>`;
+    return `<div class="metric-row"><div><b>${esc(site)}</b><div class="muted-small">${rows.length} suivis · ${nonDisponibles} non disponibles · ${problems} en cours · ${reformes} réformés · ${reparations} réparation · ${attentes} attente · ancienneté max ${maxAge} j</div></div><strong>${nonDisponibles}</strong></div>`;
   }).join("");
   const priorityRows=ages.filter(x=>isReformPending(x.entry)||x.days>=7).slice(0,20).map(x=>{
     const e=x.entry; const reform=isReformPending(e);

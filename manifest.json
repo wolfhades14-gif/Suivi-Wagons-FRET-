@@ -1,7 +1,7 @@
 {
   "name":"Suivi Wagons FRET",
   "short_name":"Wagons FRET",
-  "start_url":"./index.html?v=13.0",
+  "start_url":"./index.html?v=13.1",
   "scope":"./",
   "display":"standalone",
   "background_color":"#EEF3F7",
