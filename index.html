@@ -440,7 +440,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
 @media(max-width:430px){header.top{padding:14px 12px 10px}.brand-train{width:44px;height:54px;flex-basis:44px}.brand-train svg{width:44px;height:44px}.brand-line{gap:7px}.brand-line h1{font-size:24px}.brand-line p{font-size:12.5px}.header-right{gap:6px}.oncf-mark{display:none}.logout-btn{padding:8px 10px;font-size:11px}.header-role{margin-left:51px;margin-top:6px}.chips-row{gap:6px;margin-top:11px}.chip-stat{min-height:60px;padding:8px 7px}.chip-stat .n{font-size:21px}.chip-stat .l{font-size:10px}.main-kpi .kpi-icon{left:12px;top:12px;width:36px;height:36px;font-size:22px}.main-kpi .num,.main-kpi .lab,.main-kpi .sub{margin-left:46px}}
 
 <style>
-/* V12.5 — alignement fin avec la maquette mobile */
+/* V12.2 — alignement fin avec la maquette mobile */
 .chips-row{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:15px;overflow:visible;padding:0}
 .chip-stat{position:relative;min-width:0;border:0;border-radius:16px;padding:12px 10px 10px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.16);color:#fff;min-height:70px}
 .chip-stat .n{display:block;font-size:30px;font-weight:850;line-height:1;margin-bottom:7px;color:#fff}
@@ -470,14 +470,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
   .chip-stat .l{font-size:10px}
   .chip-icon{width:25px;height:25px;right:7px;top:7px;font-size:15px}
 }
-
-.report-preview{margin-top:14px;border:1px solid var(--border);border-radius:14px;background:#fff;overflow:auto;max-height:70vh;padding:14px}.report-preview iframe{width:100%;min-height:900px;border:0;background:#fff}.report-preview.hidden{display:none}.report-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;position:sticky;top:0;background:#fff;padding-bottom:8px;border-bottom:1px solid var(--border);z-index:2}
 </style>
-<style>
-/* V12.5 final corrections */
-.header-role{margin-left:49px;margin-top:7px;display:block;min-height:30px}
-.header-role .role-pill{display:inline-flex;align-items:center;justify-content:center;border-radius:18px;padding:7px 15px;background:#EAF5FB;color:#244D70;font-size:12px;font-weight:650;line-height:1.1}
-@media(max-width:430px){.header-role{margin-left:49px;margin-top:6px}.header-role .role-pill{padding:6px 13px;font-size:12px}}
 </style>
 </head>
 <body>
@@ -493,7 +486,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
             <p>Beni Ansar, Selouane et Hassi Blal</p>
           </div>
         </div>
-        <div class="header-role"><span id="currentUserRole" class="role-pill"></span></div>
+        <div id="currentUserChip" class="header-role"></div>
       </div>
       <div class="header-right">
         <div class="oncf-mark"><strong>ONCF</strong><span>Ensemble pour un parc performant</span></div>
@@ -580,7 +573,7 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 15; // V12.7 defensive export correction
+const STORAGE_VERSION = 14;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 
@@ -796,8 +789,8 @@ function render(){
 }
 
 function renderHeaderChips(){
-  const chipUser = document.getElementById("currentUserRole");
-  if(chipUser) chipUser.textContent = roleLabel();
+  const chipUser = document.getElementById("currentUserChip");
+  if(chipUser) chipUser.innerHTML = `<span class="role-pill">${esc(roleLabel())}</span>`;
   document.getElementById("logoutBtn")?.addEventListener("click",()=>{ clearSession(); location.reload(); });
   const latest = isVisitor() ? latestPerWagon(entries).filter(e=>e.visitor===currentUser.username) : latestPerWagon(entries);
   const counts = {};
@@ -1130,7 +1123,42 @@ function wagonCardHTML(e){
 
 function viewPilotage(){
   if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
-  return `<div class="card"><h2 class="section-title">Pilotage du parc FRET</h2><p class="v9-note">Cette vue est réservée au compte Contrôleur matériel. Elle reprend les indicateurs avancés réservés au Contrôleur matériel.</p></div>${viewDashboard()}`;
+  if(!storageOk) return bannerHTML()+`<div class="empty"><p>Données indisponibles.</p></div>`;
+  const latest = dashboardLatest();
+  const allLatest = latestPerWagon(entries);
+  const currentProblems = latest.filter(e => problemStatus(e.status));
+  const ages = currentProblems.map(e => ({entry:e,start:currentEpisodeStart(e),days:episodeAgeDays(e) ?? 0}))
+    .sort((a,b)=>b.days-a.days || a.entry.wagon.localeCompare(b.entry.wagon));
+  const aged7=ages.filter(x=>x.days>=7).length, aged15=ages.filter(x=>x.days>=15).length, aged30=ages.filter(x=>x.days>=30).length;
+  const motifMap=new Map();
+  currentProblems.forEach(e=>{const m=e.motif||"Aucune";motifMap.set(m,(motifMap.get(m)||0)+1);});
+  const motifs=[...motifMap.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,8);
+  const siteRows=SITES.map(site=>{
+    const rows=allLatest.filter(e=>e.site===site);
+    const problems=rows.filter(e=>problemStatus(e.status)).length;
+    const reformes=rows.filter(e=>isReformPending(e)).length;
+    const oldest=rows.filter(e=>problemStatus(e.status)).map(e=>episodeAgeDays(e)??0);
+    const maxAge=oldest.length?Math.max(...oldest):0;
+    return `<div class="metric-row"><div><b>${esc(site)}</b><div class="muted-small">${rows.length} suivis · ${problems} en cours · ${reformes} réformés · ancienneté max ${maxAge} j</div></div><strong>${problems}</strong></div>`;
+  }).join("");
+  const priorityRows=ages.filter(x=>isReformPending(x.entry)||x.days>=7).slice(0,20).map(x=>{
+    const e=x.entry; const reform=isReformPending(e);
+    const label=reform?"RÉFORME À TRAITER":x.days>=30?"URGENT":x.days>=15?"À TRAITER":"À SURVEILLER";
+    const action=reform?"Vérifier l'action de réforme ou l'acheminement":x.days>=30?"Analyser le blocage et définir une action":x.days>=15?"Programmer ou relancer l'intervention":"Maintenir le suivi";
+    return `<div class="attention-row"><div class="attention-top"><span class="attention-wagon">${esc(e.wagon)}</span><span class="age-badge ${label==='URGENT'?'a30':label==='À SURVEILLER'?'a7':'a15'}">${label}</span></div><div class="attention-meta">${esc(e.status)} · ${esc(e.site)} · ${x.days} j</div><div class="muted-small" style="margin-top:4px">${esc(action)}</div></div>`;
+  }).join("") || `<div class="attention-empty">Aucune priorité identifiée.</div>`;
+  const motifRows=motifs.map(([m,n])=>`<div class="metric-row"><span>${esc(m)}</span><strong>${n}</strong></div>`).join("") || `<div class="attention-empty">Aucun motif renseigné sur les situations en cours.</div>`;
+  const weeks=[]; const now=new Date();
+  for(let i=5;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i*7);weeks.push(isoWeekFromDate(d));}
+  const weekly=weeks.map(w=>({w,imm:statusTransitionEntries("Immobilisé",w).length,dispo:statusTransitionEntries("Disponible",w).length,reforme:statusTransitionEntries("Réformé",w).length}));
+  const weeklyRows=weekly.map(x=>`<div class="week-row" style="grid-template-columns:72px 1fr 1fr 1fr;gap:8px;align-items:center"><div class="week-label">${esc(x.w)}</div><div class="week-num" style="text-align:center"><b>${x.imm}</b><div class="muted-small">imm.</div></div><div class="week-num" style="text-align:center"><b>${x.dispo}</b><div class="muted-small">dispo.</div></div><div class="week-num" style="text-align:center"><b>${x.reforme}</b><div class="muted-small">réf.</div></div></div>`).join("");
+  return `<div class="card"><h2 class="section-title">Pilotage opérationnel · Analyse & décision</h2><p class="help-text">Cette vue complète le Tableau de bord : elle ne répète pas les compteurs de situation. Elle met l'accent sur les priorités, l'ancienneté, les motifs et les écarts par site.</p></div>
+  <div class="card"><h2 class="section-title">Ancienneté des épisodes en cours</h2><div class="age-summary"><div><b>${aged7}</b><span>≥ 7 jours</span></div><div><b>${aged15}</b><span>≥ 15 jours</span></div><div><b>${aged30}</b><span>≥ 30 jours</span></div></div><p class="help-text">Seuils internes de pilotage, non réglementaires.</p></div>
+  <div class="card"><h2 class="section-title">Priorités d'action</h2><div class="attention-table">${priorityRows}</div></div>
+  <div class="card"><h2 class="section-title">Analyse par site</h2>${siteRows}</div>
+  <div class="card"><h2 class="section-title">Motifs des situations en cours</h2>${motifRows}</div>
+  <div class="card"><h2 class="section-title">Évolution hebdomadaire</h2><div class="muted-small" style="display:grid;grid-template-columns:72px 1fr 1fr 1fr;gap:8px;margin-bottom:6px"><span>Semaine</span><span style="text-align:center">Imm.</span><span style="text-align:center">Dispo.</span><span style="text-align:center">Réf.</span></div>${weeklyRows}</div>
+  <div class="card"><h2 class="section-title">Décisions à préparer</h2><div class="attention-row"><b>1. Wagons ≥ 15 jours</b><div class="muted-small">Identifier le responsable, le blocage et la prochaine échéance.</div></div><div class="attention-row"><b>2. Réformes en cours</b><div class="muted-small">Vérifier la situation d'acheminement et les actions restantes.</div></div><div class="attention-row"><b>3. Écarts entre sites</b><div class="muted-small">Comparer les volumes en cours et les délais afin de cibler les relances.</div></div></div>`;
 }
 function viewUsers(){
   if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
@@ -1165,7 +1193,6 @@ function viewExport(){
         <button class="btn secondary" id="exportCharts">🖼️ Exporter les 3 graphiques (SVG)</button>
       </div>
       <p class="help-text">Le bilan généré contient une synthèse, les KPI, les tableaux statistiques et les graphiques. Le fichier HTML est modifiable et peut être imprimé en PDF depuis le téléphone ou le PC.</p>
-      <div id="reportPreview" class="report-preview hidden"></div>
     </div>
 
     <div class="card">
@@ -1192,28 +1219,22 @@ function viewExport(){
     </div>`;
 }
 
-function entryDateKey(e){
-  const raw=e?.created_at || e?.createdAt || e?.date || e?.timestamp || "";
-  const d=new Date(raw);
-  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0,10);
-}
 function reportRows(){
   const start=document.getElementById("reportStart")?.value||"";
   const end=document.getElementById("reportEnd")?.value||"";
   const site=document.getElementById("reportSite")?.value||"Tous";
   let rows=activeEntries();
-  if(start) rows=rows.filter(e=>entryDateKey(e) && entryDateKey(e)>=start);
-  if(end) rows=rows.filter(e=>entryDateKey(e) && entryDateKey(e)<=end);
+  if(start) rows=rows.filter(e=>e.created_at.slice(0,10)>=start);
+  if(end) rows=rows.filter(e=>e.created_at.slice(0,10)<=end);
   if(site!=="Tous") rows=rows.filter(e=>e.site===site);
   return {rows,start,end,site};
 }
 function reportSnapshot(){
-  // Defensive normalization for legacy records imported from earlier versions.
   const {rows,start,end,site}=reportRows();
   const all=latestPerWagon(entries).filter(e=>site==="Tous"||e.site===site);
   const inPeriod=latestPerWagon(rows);
   const currentProblems=inPeriod.filter(e=>problemStatus(e.status));
-  const reformes=inPeriod.filter(e=>isReformPending(e)).length;
+  const reforms=inPeriod.filter(e=>isReformPending(e)).length;
   const anomalies=rows.filter(e=>e.motif && e.motif!=="Aucune").length;
   const resolved=rows.filter(e=>e.status==="Disponible").length;
   const bySite=SITES.map(s=>({site:s,wagons:all.filter(e=>e.site===s).length,imm:all.filter(e=>e.site===s&&e.status==="Immobilisé").length,repar:all.filter(e=>e.site===s&&e.status==="En réparation").length,attente:all.filter(e=>e.site===s&&e.status==="En attente").length,reforme:all.filter(e=>e.site===s&&isReformPending(e)).length})).filter(x=>site==="Tous"||x.site===site);
@@ -1247,7 +1268,7 @@ function buildReportHTML(r){
   const k=r.kpi;
   const siteRows=r.bySite.map(x=>`<tr><td>${escHtml(x.site)}</td><td>${x.wagons}</td><td>${x.imm}</td><td>${x.repar}</td><td>${x.attente}</td><td>${x.reforme}</td></tr>`).join("");
   const motifRows=r.motifs.map(x=>`<tr><td>${escHtml(x.motif)}</td><td>${x.count}</td></tr>`).join("");
-  const weekRows=r.weeks.map(x=>`<tr><td>${escHtml(x.week)}</td><td>${x.imm}</td><td>${x.dispo}</td><td>${x.reforme}</td></tr>`).join("");
+  const weekRows=r.weeks.map(x=>`<tr><td>${escHtml(x.week)}</td><td>${x.saisies}</td><td>${x.imm}</td><td>${x.dispo}</td><td>${x.reforme}</td></tr>`).join("");
   const chart=`<div class="chart"><h3>Évolution des saisies par semaine</h3><svg viewBox="0 0 900 300" role="img" aria-label="Graphique des saisies par semaine"><line x1="60" y1="250" x2="860" y2="250" stroke="#999"/><line x1="60" y1="30" x2="60" y2="250" stroke="#999"/>${r.weeks.map((x,i)=>{const max=Math.max(1,...r.weeks.map(w=>w.saisies));const bw=Math.min(60,700/Math.max(1,r.weeks.length));const h=200*x.saisies/max;const x0=75+i*(780/Math.max(1,r.weeks.length));return `<rect x="${x0}" y="${250-h}" width="${bw}" height="${h}" fill="#2C4A63"/><text x="${x0+bw/2}" y="270" text-anchor="middle" font-size="11">${escHtml(x.week)}</text><text x="${x0+bw/2}" y="${240-h}" text-anchor="middle" font-size="11">${x.saisies}</text>`}).join("")}</svg></div>`;
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escHtml(reportTitle(r))}</title><style>body{font-family:Arial,sans-serif;margin:32px;color:#16232E}h1{margin-bottom:4px}h2{margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:6px}.meta{color:#5B6B7A}.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.box{border:1px solid #ddd;border-radius:8px;padding:12px}.box b{display:block;font-size:24px}.box span{font-size:12px;color:#5B6B7A}table{border-collapse:collapse;width:100%;margin-top:10px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#f1f3f5}.chart{margin-top:18px;border:1px solid #ddd;padding:12px}svg{width:100%;height:auto}@media print{body{margin:15mm}.no-print{display:none}}
 
@@ -1323,60 +1344,84 @@ nav.tabbar button.active{color:#15557D;background:#E3EFF7}
 
 </style></head><body><h1>${escHtml(reportTitle(r))}</h1><div class="meta">Période : ${escHtml(reportPeriodLabel(r))} · Généré le ${escHtml(new Date().toLocaleString("fr-FR"))}</div><h2>1. Synthèse KPI</h2><div class="kpi"><div class="box"><b>${k.liberes}</b><span>Wagons remis à disposition</span></div><div class="box"><b>${k.nouveaux}</b><span>Nouveaux immobilisés</span></div><div class="box"><b>${k.liberes}</b><span>Wagons libérés / disponibles</span></div><div class="box"><b>${k.reformes}</b><span>Réformés</span></div><div class="box"><b>${k.anomalies}</b><span>Anomalies / motifs renseignés</span></div><div class="box"><b>${k.resolved}</b><span>Situations saisies comme disponibles</span></div><div class="box"><b>${k.taux}%</b><span>Taux indicatif de disponibilité des saisies</span></div><div class="box"><b>${k.actions}</b><span>Situations en réparation / attente</span></div></div><p class="meta">Ancienneté des épisodes en cours : ≥7 j : ${k.age7} · ≥15 j : ${k.age15} · ≥30 j : ${k.age30}. Ces seuils sont des seuils de pilotage de l'application, pas des seuils réglementaires.</p><h2>2. Répartition par site</h2><table><thead><tr><th>Site</th><th>Wagons suivis</th><th>Immobilisés</th><th>En réparation</th><th>En attente</th><th>Réformés</th></tr></thead><tbody>${siteRows||'<tr><td colspan="6">Aucune donnée</td></tr>'}</tbody></table><h2>3. Motifs des situations en cours</h2><table><thead><tr><th>Motif</th><th>Nombre</th></tr></thead><tbody>${motifRows||'<tr><td colspan="2">Aucune donnée</td></tr>'}</tbody></table><h2>4. Activité par semaine</h2><table><thead><tr><th>Semaine</th><th>Immobilisés</th><th>Disponibles</th><th>Réformés</th></tr></thead><tbody>${weekRows||'<tr><td colspan="4">Aucune donnée</td></tr>'}</tbody></table><h2>5. Graphiques</h2><div class="chart"><h3>Activité par semaine</h3>${svgActivity(r)}</div><div class="chart"><h3>Wagons suivis par site</h3>${svgSites(r)}</div><div class="chart"><h3>Top motifs des situations en cours</h3>${svgMotifs(r)}</div><h2>6. Données nominatives</h2><table><thead><tr><th>Wagon</th><th>Site</th><th>Série</th><th>Situation</th><th>Motif</th><th>Agent</th><th>Date</th></tr></thead><tbody>${r.inPeriod.map(e=>`<tr><td>${escHtml(e.wagon)}</td><td>${escHtml(e.site)}</td><td>${escHtml(e.serie)}</td><td>${escHtml(e.status)}</td><td>${escHtml(e.motif)}</td><td>${escHtml(e.visitor)}</td><td>${escHtml(fmtDateTime(e.created_at))}</td></tr>`).join("")||'<tr><td colspan="7">Aucune donnée</td></tr>'}</tbody></table><p class="meta">Document généré automatiquement à partir des saisies conservées dans l'application. Vérifier les données avant diffusion.</p></body></html>`;
 }
-function downloadCSV(content,filename){ return downloadBlob(content,filename,"text/csv;charset=utf-8"); }
-function downloadBlob(content,filename,type){
-  try{
-    const blob=new Blob([content],{type});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url; a.download=filename; a.rel="noopener";
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1500);
-    return true;
-  }catch(err){
-    try{
-      const a=document.createElement("a");
-      a.href="data:"+encodeURIComponent(type)+","+encodeURIComponent(content);
-      a.download=filename; a.rel="noopener";
-      document.body.appendChild(a); a.click(); a.remove();
-      return true;
-    }catch(e){ showToast("Téléchargement non disponible sur ce navigateur"); return false; }
-  }
-}
+function downloadBlob(content,filename,type){const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);}
 function reportFilename(ext){return `bilan_wagons_fret_${new Date().toISOString().slice(0,10)}.${ext}`;}
-function openReportPreview(){
-  const r=reportSnapshot();
-  const box=document.getElementById("reportPreview");
-  if(!box) return;
-  box.classList.remove("hidden");
-  box.innerHTML=`<div class="report-preview-head"><strong>Aperçu du bilan</strong><div style="display:flex;gap:8px"><button class="btn" id="downloadReportPreview" type="button">Télécharger HTML</button><button class="btn secondary" id="closeReportPreview" type="button">Fermer</button></div></div><iframe title="Aperçu du bilan"></iframe>`;
-  const frame=box.querySelector("iframe");
-  frame.srcdoc=buildReportHTML(r);
-  document.getElementById("downloadReportPreview").onclick=()=>exportReportHtml();
-  document.getElementById("closeReportPreview").onclick=()=>{box.classList.add("hidden");box.innerHTML="";};
-  box.scrollIntoView({behavior:"smooth",block:"start"});
-  showToast("Bilan généré : aperçu affiché");
+function printReport(){const r=reportSnapshot();const w=window.open("","_blank");if(!w){showToast("Autorisez les fenêtres pour imprimer le bilan");return;}w.document.open();w.document.write(buildReportHTML(r));w.document.close();setTimeout(()=>w.print(),500);}
+function exportReportHtml(){const r=reportSnapshot();downloadBlob(buildReportHTML(r),reportFilename("html"),"text/html;charset=utf-8");showToast("Bilan HTML créé");}
+function exportReportWord(){const r=reportSnapshot();downloadBlob(buildReportHTML(r),reportFilename("doc"),"application/msword");showToast("Document Word compatible créé");}
+function exportReportExcel(){const r=reportSnapshot();const k=r.kpi;const rows=[['Bilan matériel remorqué FRET',reportPeriodLabel(r)],['Site',r.site],[],['KPI','Valeur'],['Wagons remis à disposition',k.liberes],['Nouveaux immobilisés',k.nouveaux],['Wagons libérés / disponibles',k.liberes],['Réformés',k.reformes],['Anomalies / motifs renseignés',k.anomalies],['Situations disponibles',k.resolved],['Taux indicatif',k.taux+'%'],['Situations en réparation / attente',k.actions],['≥ 7 jours',k.age7],['≥ 15 jours',k.age15],['≥ 30 jours',k.age30],[],['Répartition par site'],['Site','Wagons suivis','Immobilisés','En réparation','En attente','Réformés'],...r.bySite.map(x=>[x.site,x.wagons,x.imm,x.repar,x.attente,x.reforme]),[],['Motifs','Nombre'],...r.motifs.map(x=>[x.motif,x.count]),[],['Activité par semaine'],['Semaine','Immobilisés','Disponibles','Réformés'],...r.weeks.map(x=>[x.week,x.imm,x.dispo,x.reforme])];const html=`<html><head><meta charset="utf-8"></head><body><table>${rows.map(row=>`<tr>${row.map(v=>`<td>${escHtml(v)}</td>`).join("")}</tr>`).join("")}</table></body></html>`;downloadBlob('\uFEFF'+html,reportFilename("xls"),"application/vnd.ms-excel;charset=utf-8");showToast("Fichier Excel compatible créé");}
+function exportKpiCsv(){const r=reportSnapshot();const k=r.kpi;downloadCSV(toCSV(Object.entries(k),["KPI","Valeur"],x=>x),`kpi_wagons_fret_${new Date().toISOString().slice(0,10)}.csv`);showToast("KPI exportés");}
+function exportStatsCsv(){const r=reportSnapshot();const lines=[];r.bySite.forEach(x=>lines.push({type:"site",categorie:x.site,wagons:x.wagons,immobilises:x.imm,reparation:x.repar,attente:x.attente,reformes:x.reforme}));r.motifs.forEach(x=>lines.push({type:"motif",categorie:x.motif,wagons:x.count,immobilises:"",reparation:"",attente:"",reformes:""}));downloadCSV(toCSV(lines,["Type","Catégorie","Wagons","Immobilisés","En réparation","En attente","Réformés"],x=>[x.type,x.categorie,x.wagons,x.immobilises,x.reparation,x.attente,x.reformes]),`statistiques_wagons_fret_${new Date().toISOString().slice(0,10)}.csv`);showToast("Statistiques exportées");}
+
+function bannerHTML(){
+  return `<div class="banner"><span>Erreur de chargement des données.</span><button id="retryLoad">Réessayer</button></div>`;
 }
-function printReport(){
-  const r=reportSnapshot();
-  const w=window.open("","_blank");
-  if(w){w.document.open();w.document.write(buildReportHTML(r));w.document.close();setTimeout(()=>w.print(),700);return;}
-  // Fallback Android : print from an in-page iframe if popups are blocked.
-  const box=document.getElementById("reportPreview");
-  if(!box) return;
-  box.classList.remove("hidden");
-  box.innerHTML=`<div class="report-preview-head"><strong>Impression du bilan</strong><button class="btn secondary" id="closeReportPrint" type="button">Fermer</button></div><iframe title="Bilan à imprimer"></iframe>`;
-  const frame=box.querySelector("iframe");
-  frame.srcdoc=buildReportHTML(r);
-  document.getElementById("closeReportPrint").onclick=()=>{box.classList.add("hidden");box.innerHTML="";};
-  frame.onload=()=>{try{frame.contentWindow.focus();frame.contentWindow.print();}catch(e){showToast("Utilisez le menu du navigateur pour imprimer");}};
-  box.scrollIntoView({behavior:"smooth",block:"start"});
+
+/* ---------- History modal ---------- */
+function openHistory(wagon){
+  let rows = entries.filter(e => e.wagon === wagon);
+  if(isVisitor()) rows = rows.filter(e => e.site === currentUser.site);
+  rows.sort((a,b) => b.created_at.localeCompare(a.created_at));
+  const overlay = document.getElementById("modalOverlay");
+  const sheet = document.getElementById("modalSheet");
+  sheet.innerHTML = `
+    <div class="modal-head">
+      <h3>Historique — wagon ${esc(wagon)}</h3>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="hist-note">Chaque saisie est conservée. Une correction ne supprime pas l'ancien enregistrement : elle l'annule et laisse sa trace dans l'historique.</div>
+    ${rows.map(e => {
+      const col = STATUS_COLOR[e.status] || STATUS_COLOR["En attente"];
+      return `
+        <div class="hist-item ${e.cancelled_at ? "cancelled" : ""}" style="border-color:${col.c}">
+          <div class="dot" style="background:${col.c}"></div>
+          <div class="when">${fmtDateTime(e.created_at)} · Semaine ${esc(e.week)}</div>
+          <div class="st" style="color:${col.c}">${esc(e.status)}</div>
+          <div class="det">${esc(e.site)} · ${esc(e.serie)}${e.motif && e.motif!=="Aucune" ? " · " + esc(e.motif) : ""}${e.isolation && e.isolation!=="Aucun" ? " · étiquette mod: " + esc(e.isolation) : ""}</div>
+          ${e.observation ? `<div class="det">${esc(e.observation)}</div>` : ""}
+          <div class="card-foot">${esc(e.visitor || "Agent non renseigné")}</div>
+          ${e.cancelled_at ? `<div class="det" style="color:var(--red)">Saisie annulée le ${fmtDateTime(e.cancelled_at)}${e.cancelled_reason ? " · " + esc(e.cancelled_reason) : ""}</div>` : `<button class="hist-cancel" data-id="${esc(e.id)}">Annuler cette saisie</button>`}
+        </div>`;
+    }).join("")}
+  `;
+  overlay.classList.remove("hidden");
+  document.getElementById("modalClose").onclick = closeHistory;
+  sheet.querySelectorAll(".hist-cancel").forEach(btn => {
+    btn.onclick = async () => {
+      const reason = prompt("Motif d'annulation (facultatif) :", "Erreur de saisie");
+      if(reason === null) return;
+      const target = entries.find(e => e.id === btn.dataset.id);
+      if(!target || target.cancelled_at) return;
+      target.cancelled_at = new Date().toISOString();
+      target.cancelled_reason = reason.trim();
+      const ok = await saveEntries();
+      if(ok){ showToast("Saisie annulée, historique conservé"); }
+      else { target.cancelled_at = null; target.cancelled_reason = ""; showToast("Échec de l'enregistrement"); }
+      openHistory(wagon);
+      render();
+    };
+  });
 }
-function exportReportHtml(){const r=reportSnapshot();downloadBlob(buildReportHTML(r),reportFilename("html"),"text/html;charset=utf-8");showToast("Bilan HTML créé dans les téléchargements");}
-function exportReportWord(){const r=reportSnapshot();downloadBlob(buildReportHTML(r),reportFilename("doc"),"application/msword;charset=utf-8");showToast("Document Word créé dans les téléchargements");}
-function exportReportExcel(){const r=reportSnapshot();const k=r.kpi;const rows=[['Bilan matériel remorqué FRET',reportPeriodLabel(r)],['Site',r.site],[],['KPI','Valeur'],['Wagons remis à disposition',k.liberes],['Nouveaux immobilisés',k.nouveaux],['Wagons libérés / disponibles',k.liberes],['Réformés',k.reformes],['Anomalies / motifs renseignés',k.anomalies],['Situations disponibles',k.resolved],['Taux indicatif',k.taux+'%'],['Situations en réparation / attente',k.actions],['≥ 7 jours',k.age7],['≥ 15 jours',k.age15],['≥ 30 jours',k.age30],[],['Répartition par site'],['Site','Wagons suivis','Immobilisés','En réparation','En attente','Réformés'],...r.bySite.map(x=>[x.site,x.wagons,x.imm,x.repar,x.attente,x.reforme]),[],['Motifs','Nombre'],...r.motifs.map(x=>[x.motif,x.count]),[],['Activité par semaine'],['Semaine','Immobilisés','Disponibles','Réformés'],...r.weeks.map(x=>[x.week,x.imm,x.dispo,x.reforme])];const html=`<html><head><meta charset="utf-8"></head><body><table>${rows.map(row=>`<tr>${row.map(v=>`<td>${escHtml(v)}</td>`).join("")}</tr>`).join("")}</table></body></html>`;downloadBlob('\uFEFF'+html,reportFilename("xls"),"application/vnd.ms-excel;charset=utf-8");showToast("Excel compatible créé dans les téléchargements");}
-function exportKpiCsv(){const r=reportSnapshot();const k=r.kpi;downloadBlob(toCSV(Object.entries(k),["KPI","Valeur"],x=>x),`kpi_wagons_fret_${new Date().toISOString().slice(0,10)}.csv`,"text/csv;charset=utf-8");showToast("KPI CSV créé dans les téléchargements");}
-function exportStatsCsv(){const r=reportSnapshot();const lines=[];r.bySite.forEach(x=>lines.push({type:"site",categorie:x.site,wagons:x.wagons,immobilises:x.imm,reparation:x.repar,attente:x.attente,reformes:x.reforme}));r.motifs.forEach(x=>lines.push({type:"motif",categorie:x.motif,wagons:x.count,immobilises:"",reparation:"",attente:"",reformes:""}));downloadBlob(toCSV(lines,["Type","Catégorie","Wagons","Immobilisés","En réparation","En attente","Réformés"],x=>[x.type,x.categorie,x.wagons,x.immobilises,x.reparation,x.attente,x.reformes]),`statistiques_wagons_fret_${new Date().toISOString().slice(0,10)}.csv`,"text/csv;charset=utf-8");showToast("Statistiques CSV créées dans les téléchargements");}
+function closeHistory(){
+  document.getElementById("modalOverlay").classList.add("hidden");
+}
+
+/* ---------- CSV export ---------- */
+function toCSV(rows, headers, mapper){
+  const lines = [headers.join(",")];
+  for(const r of rows){
+    lines.push(mapper(r).map(v => `"${String(v ?? "").replace(/"/g,'""')}"`).join(","));
+  }
+  return "\uFEFF" + lines.join("\r\n");
+}
+function downloadCSV(content, filename){
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 /* ---------- Event handlers ---------- */
 function attachV10Handlers(){
@@ -1503,24 +1548,15 @@ function attachViewHandlers(){
   }
 
   if(state.view === "export" && isController()){
-    const runExportAction = (fn) => () => {
-      try { fn(); }
-      catch(err) {
-        console.error("Export error", err);
-        showToast("Erreur export : " + (err?.message || "données invalides"));
-        const box=document.getElementById("reportPreview");
-        if(box){ box.classList.remove("hidden"); box.innerHTML='<div class="report-preview-head"><strong>Erreur de génération</strong></div><p class="help-text">'+esc(String(err?.message || err))+'</p>'; }
-      }
-    };
-    document.getElementById("generateReport")?.addEventListener("click", runExportAction(openReportPreview));
-    document.getElementById("exportKpiCsv")?.addEventListener("click", runExportAction(exportKpiCsv));
-    document.getElementById("exportStatsCsv")?.addEventListener("click", runExportAction(exportStatsCsv));
-    document.getElementById("exportExcel")?.addEventListener("click", runExportAction(exportReportExcel));
-    document.getElementById("exportWord")?.addEventListener("click", runExportAction(exportReportWord));
-    document.getElementById("printReport")?.addEventListener("click", runExportAction(printReport));
+    document.getElementById("generateReport")?.addEventListener("click", exportReportHtml);
+    document.getElementById("exportKpiCsv")?.addEventListener("click", exportKpiCsv);
+    document.getElementById("exportStatsCsv")?.addEventListener("click", exportStatsCsv);
+    document.getElementById("exportExcel")?.addEventListener("click", exportReportExcel);
+    document.getElementById("exportWord")?.addEventListener("click", exportReportWord);
+    document.getElementById("printReport")?.addEventListener("click", printReport);
     document.getElementById("exportCharts")?.addEventListener("click", ()=>{const r=reportSnapshot();const d=new Date().toISOString().slice(0,10);downloadSvg(svgActivity(r),`graphique_activite_wagons_fret_${d}.svg`);downloadSvg(svgSites(r),`graphique_sites_wagons_fret_${d}.svg`);downloadSvg(svgMotifs(r),`graphique_motifs_wagons_fret_${d}.svg`);showToast("3 graphiques SVG exportés");});
-    document.getElementById("exportSituation")?.addEventListener("click", () => {
-      const rows = latestPerWagon(entries).sort((a,b)=>String(a.site||"").localeCompare(String(b.site||""))||String(a.wagon||"").localeCompare(String(b.wagon||"")));
+    document.getElementById("exportSituation").addEventListener("click", () => {
+      const rows = latestPerWagon(entries).sort((a,b)=>a.site.localeCompare(b.site)||a.wagon.localeCompare(b.wagon));
       const csv = toCSV(rows,
         ["Wagon","Site","Série","Semaine","Situation","Réforme en cours","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
         r => [r.wagon,r.site,r.serie,r.week,r.status,isReformPending(r)?"Oui":"Non",r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
@@ -1528,8 +1564,8 @@ function attachViewHandlers(){
       downloadCSV(csv, "situation_actuelle_wagons_fret.csv");
     });
 
-    document.getElementById("exportHistorique")?.addEventListener("click", () => {
-      const rows = [...entries].sort((a,b)=>entryDateKey(a).localeCompare(entryDateKey(b)));
+    document.getElementById("exportHistorique").addEventListener("click", () => {
+      const rows = [...entries].sort((a,b)=>a.created_at.localeCompare(b.created_at));
       const csv = toCSV(rows,
         ["N° séquence","Identifiant","Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le","Annulée le","Motif annulation"],
         r => [r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at ? fmtDateTime(r.cancelled_at) : "",r.cancelled_reason]
@@ -1537,7 +1573,7 @@ function attachViewHandlers(){
       downloadCSV(csv, "historique_complet_wagons_fret.csv");
     });
 
-    document.getElementById("exportBackup")?.addEventListener("click", () => {
+    document.getElementById("exportBackup").addEventListener("click", () => {
       const backup = {
         app: "Suivi Wagons FRET",
         format: "suivi-wagons-fret-backup",
@@ -1610,11 +1646,8 @@ function attachViewHandlers(){
 
 document.getElementById("tabbar").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-view]");
-  if(!btn) return;
-  if((btn.hasAttribute("data-controller-only") || btn.hasAttribute("data-controller-dashboard")) && !isController()) return;
+  if(!btn || (btn.hasAttribute("data-controller-only") && !isController())) return;
   state.view = btn.dataset.view;
-  state.prefillWagon = null;
-  state.prefillEntryId = null;
   render();
 });
 
