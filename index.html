@@ -559,14 +559,16 @@ const STATUS_COLOR = {
   "Réformé":      { c: "#6B4F8A",      bg:"#EEE7F5" }
 };
 const MOTIFS = ["Aucune","VG","RA","RLCB","RLB","ILD","PDR","Frein","Caisse","Trappe","Autre"];
-const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
-function normalizeMotifs(value){
-  const list = Array.isArray(value) ? value : String(value || "").split(/\s*\+\s*|\s*[,;]\s*/);
-  const clean = [...new Set(list.map(v=>String(v||"").trim()).filter(v=>v && v!=="Aucune" && MOTIFS.includes(v)))];
-  return clean.length ? clean : ["Aucune"];
+function motifValues(entryOrValue){
+  const raw=typeof entryOrValue === "string" ? entryOrValue : (entryOrValue?.motif || "Aucune");
+  const values=String(raw).split(/\s*\+\s*/).map(x=>x.trim()).filter(Boolean);
+  return values.length ? values : ["Aucune"];
 }
-function motifsLabel(value){ return normalizeMotifs(value).join(" + "); }
-function motifList(value){ return normalizeMotifs(value).filter(v=>v!=="Aucune"); }
+function motifLabel(values){
+  const clean=[...new Set((values||[]).filter(Boolean))];
+  return clean.length ? clean.join(" + ") : "Aucune";
+}
+const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
 
 /* ---------- State ---------- */
 let entries = [];
@@ -580,7 +582,7 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 16;
+const STORAGE_VERSION = 17;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 
@@ -652,9 +654,8 @@ function normalizeEntries(list){
     id: e.id || ("legacy-" + i + "-" + Date.now().toString(36)),
     seq: Number.isFinite(e.seq) ? e.seq : i + 1,
     cancelled_at: e.cancelled_at || null,
-    cancelled_reason: e.cancelled_reason || "",
-    motifs: normalizeMotifs(e.motifs || e.motif)
-  })).map(e=>({...e, motif: motifsLabel(e.motifs)}));
+    cancelled_reason: e.cancelled_reason || ""
+  }));
 }
 async function loadEntries(){
   try{
@@ -909,7 +910,7 @@ function viewVisitorHome(){
   </div>
   <div class="card" style="margin-top:12px"><h2 class="section-title">Mes saisies</h2>
     <div class="stat-grid"><div class="stat-box"><div class="num">${mine.length}</div><div class="lab">Wagons suivis</div></div><div class="stat-box"><div class="num">${mineNonAvailable}</div><div class="lab">Non disponibles</div></div></div>
-    ${recent.length?recent.map(e=>`<div class="v10-user-row" style="padding:7px 0;border-top:1px solid var(--border)"><span><strong>${esc(e.wagon)}</strong><br><span class="v10-user-meta">${esc(e.site)} · ${esc(e.status)}</span></span><span class="role-pill">${esc(motifsLabel(e.motifs || e.motif))}</span></div>`).join(""):"<div class=\"attention-empty\">Aucune saisie pour le moment.</div>"}
+    ${recent.length?recent.map(e=>`<div class="v10-user-row" style="padding:7px 0;border-top:1px solid var(--border)"><span><strong>${esc(e.wagon)}</strong><br><span class="v10-user-meta">${esc(e.site)} · ${esc(e.status)}</span></span><span class="role-pill">${esc(e.motif||"Aucune")}</span></div>`).join(""):"<div class=\"attention-empty\">Aucune saisie pour le moment.</div>"}
   </div>`;
 }
 
@@ -982,7 +983,7 @@ function viewDashboard(){
 
   const currentProblem = latest.filter(e => ["Immobilisé","En réparation","En attente"].includes(e.status));
   const motifMap = new Map();
-  currentProblem.forEach(e => { const m=e.motif || "Aucune"; motifMap.set(m,(motifMap.get(m)||0)+1); });
+  currentProblem.forEach(e => { motifValues(e).filter(m=>m!=="Aucune").forEach(m=>motifMap.set(m,(motifMap.get(m)||0)+1)); });
   const topMotifs = [...motifMap.entries()].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0])).slice(0,5);
   const motifHtml = topMotifs.length ? topMotifs.map(([m,n])=>`<div class="metric-row"><span>${esc(m)}</span><strong>${n}</strong></div>`).join("") : `<div class="muted-small">Aucune anomalie/motif sur les situations en cours.</div>`;
 
@@ -1009,7 +1010,20 @@ function viewDashboard(){
     ${statBoxes}
     ${nonAvailableBreakdown}
     ${weeklyHtml}
-    <div class="card"><h2 class="section-title">Analyse détaillée</h2><p class="help-text">Les priorités, l’ancienneté, l’analyse par site, les motifs et l’évolution hebdomadaire sont disponibles dans l’onglet Pilotage.</p></div>
+    <div class="card">
+      <h2 class="section-title">Wagons en cours · ancienneté & priorités</h2>
+      <p class="help-text">L'ancienneté correspond au début de l'épisode continu d'immobilisation (Immobilisé / En réparation / En attente).</p>
+      <div class="age-summary"><div><b>${aged[0]}</b><span>≥ 7 jours</span></div><div><b>${aged[1]}</b><span>≥ 15 jours</span></div><div><b>${aged[2]}</b><span>≥ 30 jours</span></div></div>
+      <div class="attention-table" style="margin-top:10px;">${ages.length ? ages.sort((a,b)=>b.days-a.days || a.entry.wagon.localeCompare(b.entry.wagon)).slice(0,20).map(x=>{const e=x.entry,cls=ageClass(x.days),start=x.start;return `<div class="attention-row" data-age-wagon="${esc(e.wagon)}"><div class="attention-top"><span class="attention-wagon">${esc(e.wagon)}</span><span class="age-badge ${cls}">${ageLabel(x.days)}</span></div><div class="attention-meta">${esc(e.status)} · ${esc(e.site)} · début épisode : ${start ? fmtDateTime(start.created_at) : "À confirmer"}${e.motif && e.motif!=="Aucune" ? " · "+esc(e.motif):""}</div></div>`}).join("") : `<div class="attention-empty">Aucun wagon actuellement en immobilisation / réparation / attente.</div>`}</div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Priorités d'action</h2>
+      <p class="help-text">Priorité basée sur l'ancienneté réelle de l'épisode et sur le maintien du statut de réforme.</p>
+      <div class="attention-table">${(()=>{const items=latest.map(e=>{const reformed=isReformPending(e),days=episodeAgeDays(e);let priority="À SURVEILLER",action="Suivi normal";if(reformed){priority="RÉFORME À TRAITER";action="Vérifier la prochaine action de réforme / acheminement"}else if(problemStatus(e.status)&&days>=30){priority="URGENT";action="Analyser le blocage et définir une action"}else if(problemStatus(e.status)&&days>=15){priority="À TRAITER";action="Programmer ou relancer l'action"}else if(problemStatus(e.status)&&days>=7){priority="À SURVEILLER";action="Suivre l'évolution"}return {wagon:e.wagon,site:e.site,status:e.status,days,priority,action}}).filter(x=>x.priority!=="À SURVEILLER" || x.days!==null);return items.slice(0,20).map(x=>`<div class="attention-row"><div class="attention-top"><span class="attention-wagon">${esc(x.wagon)}</span><span class="age-badge ${x.priority.includes('URGENT')?'a30':x.priority.includes('À TRAITER')||x.priority.includes('RÉFORME')?'a15':'a7'}">${esc(x.priority)}</span></div><div class="attention-meta">${esc(x.status)} · ${esc(x.site)}${x.days!==null?` · ${x.days} j`:""}</div><div class="muted-small" style="margin-top:4px;">${esc(x.action)}</div></div>`).join("")||`<div class="attention-empty">Aucune priorité particulière identifiée.</div>`})()}</div>
+    </div>
+    <div class="card"><h2 class="section-title">Répartition par site</h2>${bySite}</div>
+    <div class="card"><h2 class="section-title">Top motifs des situations en cours</h2>${motifHtml}</div>
+    <div class="card"><h2 class="section-title">Activité des 6 dernières semaines</h2><div class="muted-small" style="display:grid;grid-template-columns:72px 1fr 1fr 1fr;gap:8px;margin-bottom:6px;"><span>Semaine</span><span style="text-align:center">Imm.</span><span style="text-align:center">Dispo.</span><span style="text-align:center">Réf.</span></div>${weeklyHtmlCompact}</div>
   `;
 }
 
@@ -1045,14 +1059,11 @@ function viewSaisie(){
           ${STATUSES.map(status => `<option value="${esc(status)}" ${status===(prefill?.status || "Immobilisé")?'selected':''}>${esc(status)}</option>`).join("")}
         </select>
 
-        <label>Motifs / anomalies (plusieurs choix possibles)</label>
-        <select name="motif" multiple size="5" aria-label="Sélectionner un ou plusieurs motifs">
-          ${MOTIFS.map(motif => {
-            const selected = normalizeMotifs(prefill?.motifs || prefill?.motif).includes(motif);
-            return `<option value="${esc(motif)}" ${selected?'selected':''}>${esc(motif)}</option>`;
-          }).join("")}
-        </select>
-        <div class="help-text">Sélectionner plusieurs motifs, par exemple : Frein + Caisse.</div>
+        <label>Motif(s) / anomalie(s)</label>
+        <div class="motif-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:6px 0 12px">
+          ${MOTIFS.filter(motif=>motif!=="Aucune").map(motif => `<label style="display:flex;align-items:center;gap:7px;font-size:14px;background:#f5f8fa;border:1px solid var(--border);border-radius:10px;padding:9px"><input type="checkbox" name="motifs" value="${esc(motif)}" ${(motifValues(prefill?.motif).includes(motif))?'checked':''}> <span>${esc(motif)}</span></label>`).join("")}
+        </div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:14px;margin-bottom:12px"><input type="checkbox" name="motifAucune" value="Aucune" ${(!prefill?.motif || prefill?.motif==="Aucune" || motifValues(prefill?.motif).includes("Aucune"))?'checked':''}> <span>Aucune anomalie renseignée</span></label>
 
         <label>Étiquette mod:</label>
         <select name="isolation">
@@ -1105,7 +1116,7 @@ function wagonCardHTML(e){
           <span class="meta-tag">${esc(e.site)}</span>
           <span class="meta-tag">${esc(e.serie)}</span>
           <span class="meta-tag">Sem. ${esc(e.week)}</span>
-          ${e.motif && e.motif !== "Aucune" ? `<span class="meta-tag">${esc(motifsLabel(e.motifs || e.motif))}</span>` : ""}
+          ${e.motif && e.motif !== "Aucune" ? `<span class="meta-tag">${esc(e.motif)}</span>` : ""}
           ${e.isolation && e.isolation !== "Aucun" ? `<span class="meta-tag">Étiquette mod: ${esc(e.isolation)}</span>` : ""}
           ${isReformPending(e) ? `<span class="meta-tag">Réforme en cours</span>` : ""}
         </div>
@@ -1131,7 +1142,7 @@ function viewPilotage(){
     .sort((a,b)=>b.days-a.days || a.entry.wagon.localeCompare(b.entry.wagon));
   const aged7=ages.filter(x=>x.days>=7).length, aged15=ages.filter(x=>x.days>=15).length, aged30=ages.filter(x=>x.days>=30).length;
   const motifMap=new Map();
-  currentProblems.forEach(e=>{normalizeMotifs(e.motifs || e.motif).forEach(m=>{ if(m!=="Aucune") motifMap.set(m,(motifMap.get(m)||0)+1); });});
+  currentProblems.forEach(e=>{motifValues(e).filter(m=>m!=="Aucune").forEach(m=>motifMap.set(m,(motifMap.get(m)||0)+1));});
   const motifs=[...motifMap.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,8);
   const siteRows=SITES.map(site=>{
     const rows=allLatest.filter(e=>e.site===site);
@@ -1189,13 +1200,9 @@ function viewExport(){
         <label>Format de période<select id="reportPeriod"><option value="month">Mois</option><option value="week">Semaine</option><option value="custom">Personnalisée</option></select></label>
       </div>
       <div class="export-actions">
-        <button class="btn" id="generateReport">📑 Générer le bilan (HTML)</button>
+        <button class="btn" id="exportCompleteDossier">📦 Générer le dossier complet (HTML + Excel)</button>
         <button class="btn secondary" id="printReport">🖨️ Ouvrir le bilan pour impression / PDF</button>
-        <button class="btn secondary" id="exportKpiCsv">📊 KPI (CSV)</button>
-        <button class="btn secondary" id="exportStatsCsv">📈 Statistiques (CSV)</button>
-        <button class="btn secondary" id="exportExcel">📗 Excel compatible (.xls)</button>
-        <button class="btn secondary" id="exportWord">📘 Word compatible (.doc)</button>
-        <button class="btn secondary" id="exportCharts">🖼️ Exporter les 3 graphiques (SVG)</button>
+        <p class="help-text" style="margin:0">Le dossier complet regroupe les KPI, analyses par site, motifs, activité hebdomadaire, graphiques et données nominatives. Les données détaillées restent dans un fichier séparé afin de garder l’application légère.</p>
       </div>
       <div id="exportPreview" class="card" style="display:none;margin-top:12px"></div>
       <p class="help-text">Le bilan généré contient une synthèse, les KPI, les tableaux statistiques et les graphiques. Le fichier HTML est modifiable et peut être imprimé en PDF depuis le téléphone ou le PC.</p>
@@ -1243,10 +1250,10 @@ function reportSnapshot(){
   const inPeriod=latestPerWagon(rows);
   const currentProblems=inPeriod.filter(e=>problemStatus(e.status));
   const reformes=inPeriod.filter(e=>isReformPending(e)).length;
-  const anomalies=rows.reduce((n,e)=>n+motifList(e.motifs || e.motif).length,0);
+  const anomalies=rows.filter(e=>e.motif && e.motif!=="Aucune").length;
   const resolved=rows.filter(e=>e.status==="Disponible").length;
   const bySite=SITES.map(s=>({site:s,wagons:all.filter(e=>e.site===s).length,imm:all.filter(e=>e.site===s&&(e.status==="Immobilisé" || isReformPending(e))).length,repar:all.filter(e=>e.site===s&&e.status==="En réparation").length,attente:all.filter(e=>e.site===s&&e.status==="En attente").length,reforme:all.filter(e=>e.site===s&&isReformPending(e)).length})).filter(x=>site==="Tous"||x.site===site);
-  const motifMap={}; currentProblems.forEach(e=>{const m=e.motif||"Aucune"; motifMap[m]=(motifMap[m]||0)+1;});
+  const motifMap={}; currentProblems.forEach(e=>{motifValues(e).filter(m=>m!=="Aucune").forEach(m=>{motifMap[m]=(motifMap[m]||0)+1;});});
   const motifs=Object.entries(motifMap).sort((a,b)=>b[1]-a[1]).map(([motif,count])=>({motif,count}));
   const weekMap={}; rows.forEach(e=>{const w=e.week||isoWeekFromDate(e.created_at); if(!weekMap[w])weekMap[w]={week:w,saisies:0,imm:0,dispo:0,reforme:0}; weekMap[w].saisies++; if(e.status==="Immobilisé")weekMap[w].imm++; if(e.status==="Disponible")weekMap[w].dispo++; if(e.status==="Réformé")weekMap[w].reforme++;});
   const weeks=Object.values(weekMap).sort((a,b)=>a.week.localeCompare(b.week));
@@ -1350,7 +1357,7 @@ nav.tabbar button.active{color:#15557D;background:#E3EFF7}
 .age-badge.a15{color:#B36A00;background:#FFF1C9}
 .age-badge.a30{color:#D73540;background:#FCE3E5}
 
-select[multiple]{min-height:130px} select[multiple] option{padding:6px} </style></head><body><h1>${escHtml(reportTitle(r))}</h1><div class="meta">Période : ${escHtml(reportPeriodLabel(r))} · Généré le ${escHtml(new Date().toLocaleString("fr-FR"))}</div><h2>1. Synthèse KPI</h2><div class="kpi"><div class="box"><b>${k.liberes}</b><span>Wagons remis à disposition</span></div><div class="box"><b>${k.nouveaux}</b><span>Nouveaux immobilisés</span></div><div class="box"><b>${k.liberes}</b><span>Wagons libérés / disponibles</span></div><div class="box"><b>${k.reformes}</b><span>Réformés actuellement</span></div><div class="box"><b>${k.anomalies}</b><span>Anomalies / motifs renseignés</span></div><div class="box"><b>${k.resolved}</b><span>Situations saisies comme disponibles</span></div><div class="box"><b>${k.taux}%</b><span>Taux indicatif de disponibilité des saisies</span></div><div class="box"><b>${k.actions}</b><span>Situations en réparation / attente</span></div></div><p class="meta">Ancienneté des épisodes en cours : ≥7 j : ${k.age7} · ≥15 j : ${k.age15} · ≥30 j : ${k.age30}. Ces seuils sont des seuils de pilotage de l'application, pas des seuils réglementaires.</p><h2>2. Répartition par site</h2><table><thead><tr><th>Site</th><th>Wagons suivis</th><th>Immobilisés</th><th>En réparation</th><th>En attente</th><th>Réformés</th></tr></thead><tbody>${siteRows||'<tr><td colspan="6">Aucune donnée</td></tr>'}</tbody></table><h2>3. Motifs des situations en cours</h2><table><thead><tr><th>Motif</th><th>Nombre</th></tr></thead><tbody>${motifRows||'<tr><td colspan="2">Aucune donnée</td></tr>'}</tbody></table><h2>4. Activité par semaine</h2><table><thead><tr><th>Semaine</th><th>Saisies</th><th>Immobilisés</th><th>Disponibles</th><th>Réformés</th></tr></thead><tbody>${weekRows||'<tr><td colspan="5">Aucune donnée</td></tr>'}</tbody></table><h2>5. Graphiques</h2><div class="chart"><h3>Activité par semaine</h3>${svgActivity(r)}</div><div class="chart"><h3>Wagons suivis par site</h3>${svgSites(r)}</div><div class="chart"><h3>Top motifs des situations en cours</h3>${svgMotifs(r)}</div><h2>6. Données nominatives</h2><table><thead><tr><th>Wagon</th><th>Site</th><th>Série</th><th>Situation</th><th>Motif</th><th>Agent</th><th>Date</th></tr></thead><tbody>${r.inPeriod.map(e=>`<tr><td>${escHtml(e.wagon)}</td><td>${escHtml(e.site)}</td><td>${escHtml(e.serie)}</td><td>${escHtml(e.status)}</td><td>${escHtml(e.motif)}</td><td>${escHtml(e.visitor)}</td><td>${escHtml(fmtDateTime(e.created_at))}</td></tr>`).join("")||'<tr><td colspan="7">Aucune donnée</td></tr>'}</tbody></table><p class="meta">Document généré automatiquement à partir des saisies conservées dans l'application. Vérifier les données avant diffusion.</p></body></html>`;
+</style></head><body><h1>${escHtml(reportTitle(r))}</h1><div class="meta">Période : ${escHtml(reportPeriodLabel(r))} · Généré le ${escHtml(new Date().toLocaleString("fr-FR"))}</div><h2>1. Synthèse KPI</h2><div class="kpi"><div class="box"><b>${k.liberes}</b><span>Wagons remis à disposition</span></div><div class="box"><b>${k.nouveaux}</b><span>Nouveaux immobilisés</span></div><div class="box"><b>${k.liberes}</b><span>Wagons libérés / disponibles</span></div><div class="box"><b>${k.reformes}</b><span>Réformés actuellement</span></div><div class="box"><b>${k.anomalies}</b><span>Anomalies / motifs renseignés</span></div><div class="box"><b>${k.resolved}</b><span>Situations saisies comme disponibles</span></div><div class="box"><b>${k.taux}%</b><span>Taux indicatif de disponibilité des saisies</span></div><div class="box"><b>${k.actions}</b><span>Situations en réparation / attente</span></div></div><p class="meta">Ancienneté des épisodes en cours : ≥7 j : ${k.age7} · ≥15 j : ${k.age15} · ≥30 j : ${k.age30}. Ces seuils sont des seuils de pilotage de l'application, pas des seuils réglementaires.</p><h2>2. Répartition par site</h2><table><thead><tr><th>Site</th><th>Wagons suivis</th><th>Immobilisés</th><th>En réparation</th><th>En attente</th><th>Réformés</th></tr></thead><tbody>${siteRows||'<tr><td colspan="6">Aucune donnée</td></tr>'}</tbody></table><h2>3. Motifs des situations en cours</h2><table><thead><tr><th>Motif</th><th>Nombre</th></tr></thead><tbody>${motifRows||'<tr><td colspan="2">Aucune donnée</td></tr>'}</tbody></table><h2>4. Activité par semaine</h2><table><thead><tr><th>Semaine</th><th>Saisies</th><th>Immobilisés</th><th>Disponibles</th><th>Réformés</th></tr></thead><tbody>${weekRows||'<tr><td colspan="5">Aucune donnée</td></tr>'}</tbody></table><h2>5. Graphiques</h2><div class="chart"><h3>Activité par semaine</h3>${svgActivity(r)}</div><div class="chart"><h3>Wagons suivis par site</h3>${svgSites(r)}</div><div class="chart"><h3>Top motifs des situations en cours</h3>${svgMotifs(r)}</div><h2>6. Données nominatives</h2><table><thead><tr><th>Wagon</th><th>Site</th><th>Série</th><th>Situation</th><th>Motif</th><th>Agent</th><th>Date</th></tr></thead><tbody>${r.inPeriod.map(e=>`<tr><td>${escHtml(e.wagon)}</td><td>${escHtml(e.site)}</td><td>${escHtml(e.serie)}</td><td>${escHtml(e.status)}</td><td>${escHtml(e.motif)}</td><td>${escHtml(e.visitor)}</td><td>${escHtml(fmtDateTime(e.created_at))}</td></tr>`).join("")||'<tr><td colspan="7">Aucune donnée</td></tr>'}</tbody></table><p class="meta">Document généré automatiquement à partir des saisies conservées dans l'application. Vérifier les données avant diffusion.</p></body></html>`;
 }
 function downloadBlob(content,filename,type){
   try{
@@ -1394,6 +1401,23 @@ function printReport(){
     setTimeout(()=>w.print(),700);
   }catch(err){showToast("Erreur impression : "+(err?.message||"erreur"));}
 }
+function exportCompleteDossier(){
+  try{
+    const r=reportSnapshot();
+    const html=buildReportHTML(r);
+    showReportPreview(html);
+    downloadBlob(html,reportFilename("html"),"text/html;charset=utf-8");
+    setTimeout(()=>{
+      try{
+        const k=r.kpi;
+        const rows=[["Bilan matériel remorqué FRET",reportPeriodLabel(r)],["Site",r.site],[],["KPI","Valeur"],["Wagons remis à disposition",k.liberes],["Nouveaux immobilisés",k.nouveaux],["Réformés",k.reformes],["Anomalies / motifs renseignés",k.anomalies],["Situations disponibles",k.resolved],["Taux indicatif",k.taux+"%"],["Situations en réparation / attente",k.actions],["≥ 7 jours",k.age7],["≥ 15 jours",k.age15],["≥ 30 jours",k.age30],[],["Répartition par site"],["Site","Wagons suivis","Immobilisés","En réparation","En attente","Réformés"],...r.bySite.map(x=>[x.site,x.wagons,x.imm,x.repar,x.attente,x.reforme]),[],["Motifs","Nombre"],...r.motifs.map(x=>[x.motif,x.count]),[],["Activité par semaine"],["Semaine","Saisies","Immobilisés","Disponibles","Réformés"],...r.weeks.map(x=>[x.week,x.saisies,x.imm,x.dispo,x.reforme])];
+        const table='<html><head><meta charset="utf-8"></head><body><table>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+escHtml(v)+'</td>').join('')+'</tr>').join('')+'</table></body></html>';
+        downloadBlob('\uFEFF'+table,reportFilename("xls"),"application/vnd.ms-excel;charset=utf-8");
+      }catch(err){showToast("Excel : "+(err?.message||"erreur"));}
+    },650);
+    showToast("Dossier généré : HTML puis Excel");
+  }catch(err){showToast("Erreur dossier : "+(err?.message||"erreur"));}
+}
 function exportReportHtml(){
   try{const html=buildReportHTML(reportSnapshot());showReportPreview(html);downloadBlob(html,reportFilename("html"),"text/html;charset=utf-8");showToast("Bilan HTML généré");}
   catch(err){showToast("Erreur bilan : "+(err?.message||"erreur"));}
@@ -1430,7 +1454,7 @@ function openHistory(wagon){
           <div class="dot" style="background:${col.c}"></div>
           <div class="when">${fmtDateTime(e.created_at)} · Semaine ${esc(e.week)}</div>
           <div class="st" style="color:${col.c}">${esc(e.status)}</div>
-          <div class="det">${esc(e.site)} · ${esc(e.serie)}${e.motif && e.motif!=="Aucune" ? " · " + esc(motifsLabel(e.motifs || e.motif)) : ""}${e.isolation && e.isolation!=="Aucun" ? " · étiquette mod: " + esc(e.isolation) : ""}</div>
+          <div class="det">${esc(e.site)} · ${esc(e.serie)}${e.motif && e.motif!=="Aucune" ? " · " + esc(e.motif) : ""}${e.isolation && e.isolation!=="Aucun" ? " · étiquette mod: " + esc(e.isolation) : ""}</div>
           ${e.observation ? `<div class="det">${esc(e.observation)}</div>` : ""}
           <div class="card-foot">${esc(e.visitor || "Agent non renseigné")}</div>
           ${e.cancelled_at ? `<div class="det" style="color:var(--red)">Saisie annulée le ${fmtDateTime(e.cancelled_at)}${e.cancelled_reason ? " · " + esc(e.cancelled_reason) : ""}</div>` : `<button class="hist-cancel" data-id="${esc(e.id)}">Annuler cette saisie</button>`}
@@ -1489,8 +1513,9 @@ function validateEntryData(entry){
   if(!SITES.includes(entry.site)) errors.push("Le site est obligatoire.");
   if(!SERIES.includes(entry.serie)) errors.push("La série est invalide.");
   if(!STATUSES.includes(entry.status)) errors.push("La situation est invalide.");
-  if(!normalizeMotifs(entry.motifs || entry.motif).every(m=>MOTIFS.includes(m))) errors.push("Un motif est invalide.");
-  if(!ISOLATION_CODES.includes(entry.isolation)) errors.push("L'étiquette de modification est invalide.");
+  const selectedMotifs=motifValues(entry.motif);
+  if(selectedMotifs.some(m=>!MOTIFS.includes(m))) errors.push("Un motif est invalide.");
+  if(!ISOLATIONS.includes(entry.isolation)) errors.push("L'étiquette de modification est invalide.");
   if(!entry.visitor) errors.push("L'agent doit être identifié.");
   if(!entry.created_at || Number.isNaN(new Date(entry.created_at).getTime())) errors.push("La date est invalide.");
   return errors;
@@ -1580,8 +1605,7 @@ function attachViewHandlers(){
         wagon,
         serie: fd.get("serie"),
         status: fd.get("status"),
-        motifs: Array.from(form.querySelector('select[name="motif"]').selectedOptions).map(o=>o.value),
-        motif: motifsLabel(Array.from(form.querySelector('select[name="motif"]').selectedOptions).map(o=>o.value)),
+        motif: motifLabel(fd.getAll("motifs").concat(fd.get("motifAucune") ? ["Aucune"] : []).filter(x=>x!=="Aucune" || fd.get("motifAucune"))),
         isolation: fd.get("isolation"),
         observation: fd.get("observation").trim(),
         visitor: currentUser.username,
@@ -1641,7 +1665,7 @@ function attachViewHandlers(){
   }
 
   if(state.view === "export" && isController()){
-    document.getElementById("generateReport")?.addEventListener("click", () => safeExport("Erreur bilan", exportReportHtml));
+    document.getElementById("exportCompleteDossier")?.addEventListener("click", () => safeExport("Erreur dossier", exportCompleteDossier));
     document.getElementById("exportKpiCsv")?.addEventListener("click", () => safeExport("Erreur KPI", exportKpiCsv));
     document.getElementById("exportStatsCsv")?.addEventListener("click", () => safeExport("Erreur statistiques", exportStatsCsv));
     document.getElementById("exportExcel")?.addEventListener("click", () => safeExport("Erreur Excel", exportReportExcel));
@@ -1652,7 +1676,7 @@ function attachViewHandlers(){
       const rows = latestPerWagon(entries).sort((a,b)=>a.site.localeCompare(b.site)||a.wagon.localeCompare(b.wagon));
       const csv = toCSV(rows,
         ["Wagon","Site","Série","Semaine","Situation","Réforme en cours","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
-        r => [r.wagon,r.site,r.serie,r.week,r.status,isReformPending(r)?"Oui":"Non",motifsLabel(r.motifs || r.motif),r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
+        r => [r.wagon,r.site,r.serie,r.week,r.status,isReformPending(r)?"Oui":"Non",r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
       );
       downloadCSV(csv, "situation_actuelle_wagons_fret.csv");
     });
@@ -1661,7 +1685,7 @@ function attachViewHandlers(){
       const rows = [...entries].sort((a,b)=>a.created_at.localeCompare(b.created_at));
       const csv = toCSV(rows,
         ["N° séquence","Identifiant","Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le","Annulée le","Motif annulation"],
-        r => [r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,motifsLabel(r.motifs || r.motif),r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at ? fmtDateTime(r.cancelled_at) : "",r.cancelled_reason]
+        r => [r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at ? fmtDateTime(r.cancelled_at) : "",r.cancelled_reason]
       );
       downloadCSV(csv, "historique_complet_wagons_fret.csv");
     });

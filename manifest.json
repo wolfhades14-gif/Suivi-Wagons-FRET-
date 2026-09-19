@@ -6,6 +6,6 @@
   "display":"standalone",
   "background_color":"#EEF3F7",
   "theme_color":"#15557D",
-  "description":"Suivi local des wagons FRET ONCF — version V16.0 renforcée.",
+  "description":"Suivi local des wagons FRET ONCF — version V17.0 renforcée.",
   "icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png"},{"src":"icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]
 }
