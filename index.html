@@ -560,6 +560,13 @@ const STATUS_COLOR = {
 };
 const MOTIFS = ["Aucune","VG","RA","RLCB","RLB","ILD","PDR","Frein","Caisse","Trappe","Autre"];
 const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
+function normalizeMotifs(value){
+  const list = Array.isArray(value) ? value : String(value || "").split(/\s*\+\s*|\s*[,;]\s*/);
+  const clean = [...new Set(list.map(v=>String(v||"").trim()).filter(v=>v && v!=="Aucune" && MOTIFS.includes(v)))];
+  return clean.length ? clean : ["Aucune"];
+}
+function motifsLabel(value){ return normalizeMotifs(value).join(" + "); }
+function motifList(value){ return normalizeMotifs(value).filter(v=>v!=="Aucune"); }
 
 /* ---------- State ---------- */
 let entries = [];
@@ -573,7 +580,7 @@ let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: n
 const STORAGE_KEY = "wagons-charbon-entries";
 const BACKUP_KEY = "wagons-fret-history-backup";
 const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 14;
+const STORAGE_VERSION = 16;
 const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
 
 
@@ -645,8 +652,9 @@ function normalizeEntries(list){
     id: e.id || ("legacy-" + i + "-" + Date.now().toString(36)),
     seq: Number.isFinite(e.seq) ? e.seq : i + 1,
     cancelled_at: e.cancelled_at || null,
-    cancelled_reason: e.cancelled_reason || ""
-  }));
+    cancelled_reason: e.cancelled_reason || "",
+    motifs: normalizeMotifs(e.motifs || e.motif)
+  })).map(e=>({...e, motif: motifsLabel(e.motifs)}));
 }
 async function loadEntries(){
   try{
@@ -901,7 +909,7 @@ function viewVisitorHome(){
   </div>
   <div class="card" style="margin-top:12px"><h2 class="section-title">Mes saisies</h2>
     <div class="stat-grid"><div class="stat-box"><div class="num">${mine.length}</div><div class="lab">Wagons suivis</div></div><div class="stat-box"><div class="num">${mineNonAvailable}</div><div class="lab">Non disponibles</div></div></div>
-    ${recent.length?recent.map(e=>`<div class="v10-user-row" style="padding:7px 0;border-top:1px solid var(--border)"><span><strong>${esc(e.wagon)}</strong><br><span class="v10-user-meta">${esc(e.site)} · ${esc(e.status)}</span></span><span class="role-pill">${esc(e.motif||"Aucune")}</span></div>`).join(""):"<div class=\"attention-empty\">Aucune saisie pour le moment.</div>"}
+    ${recent.length?recent.map(e=>`<div class="v10-user-row" style="padding:7px 0;border-top:1px solid var(--border)"><span><strong>${esc(e.wagon)}</strong><br><span class="v10-user-meta">${esc(e.site)} · ${esc(e.status)}</span></span><span class="role-pill">${esc(motifsLabel(e.motifs || e.motif))}</span></div>`).join(""):"<div class=\"attention-empty\">Aucune saisie pour le moment.</div>"}
   </div>`;
 }
 
@@ -1001,20 +1009,7 @@ function viewDashboard(){
     ${statBoxes}
     ${nonAvailableBreakdown}
     ${weeklyHtml}
-    <div class="card">
-      <h2 class="section-title">Wagons en cours · ancienneté & priorités</h2>
-      <p class="help-text">L'ancienneté correspond au début de l'épisode continu d'immobilisation (Immobilisé / En réparation / En attente).</p>
-      <div class="age-summary"><div><b>${aged[0]}</b><span>≥ 7 jours</span></div><div><b>${aged[1]}</b><span>≥ 15 jours</span></div><div><b>${aged[2]}</b><span>≥ 30 jours</span></div></div>
-      <div class="attention-table" style="margin-top:10px;">${ages.length ? ages.sort((a,b)=>b.days-a.days || a.entry.wagon.localeCompare(b.entry.wagon)).slice(0,20).map(x=>{const e=x.entry,cls=ageClass(x.days),start=x.start;return `<div class="attention-row" data-age-wagon="${esc(e.wagon)}"><div class="attention-top"><span class="attention-wagon">${esc(e.wagon)}</span><span class="age-badge ${cls}">${ageLabel(x.days)}</span></div><div class="attention-meta">${esc(e.status)} · ${esc(e.site)} · début épisode : ${start ? fmtDateTime(start.created_at) : "À confirmer"}${e.motif && e.motif!=="Aucune" ? " · "+esc(e.motif):""}</div></div>`}).join("") : `<div class="attention-empty">Aucun wagon actuellement en immobilisation / réparation / attente.</div>`}</div>
-    </div>
-    <div class="card">
-      <h2 class="section-title">Priorités d'action</h2>
-      <p class="help-text">Priorité basée sur l'ancienneté réelle de l'épisode et sur le maintien du statut de réforme.</p>
-      <div class="attention-table">${(()=>{const items=latest.map(e=>{const reformed=isReformPending(e),days=episodeAgeDays(e);let priority="À SURVEILLER",action="Suivi normal";if(reformed){priority="RÉFORME À TRAITER";action="Vérifier la prochaine action de réforme / acheminement"}else if(problemStatus(e.status)&&days>=30){priority="URGENT";action="Analyser le blocage et définir une action"}else if(problemStatus(e.status)&&days>=15){priority="À TRAITER";action="Programmer ou relancer l'action"}else if(problemStatus(e.status)&&days>=7){priority="À SURVEILLER";action="Suivre l'évolution"}return {wagon:e.wagon,site:e.site,status:e.status,days,priority,action}}).filter(x=>x.priority!=="À SURVEILLER" || x.days!==null);return items.slice(0,20).map(x=>`<div class="attention-row"><div class="attention-top"><span class="attention-wagon">${esc(x.wagon)}</span><span class="age-badge ${x.priority.includes('URGENT')?'a30':x.priority.includes('À TRAITER')||x.priority.includes('RÉFORME')?'a15':'a7'}">${esc(x.priority)}</span></div><div class="attention-meta">${esc(x.status)} · ${esc(x.site)}${x.days!==null?` · ${x.days} j`:""}</div><div class="muted-small" style="margin-top:4px;">${esc(x.action)}</div></div>`).join("")||`<div class="attention-empty">Aucune priorité particulière identifiée.</div>`})()}</div>
-    </div>
-    <div class="card"><h2 class="section-title">Répartition par site</h2>${bySite}</div>
-    <div class="card"><h2 class="section-title">Top motifs des situations en cours</h2>${motifHtml}</div>
-    <div class="card"><h2 class="section-title">Activité des 6 dernières semaines</h2><div class="muted-small" style="display:grid;grid-template-columns:72px 1fr 1fr 1fr;gap:8px;margin-bottom:6px;"><span>Semaine</span><span style="text-align:center">Imm.</span><span style="text-align:center">Dispo.</span><span style="text-align:center">Réf.</span></div>${weeklyHtmlCompact}</div>
+    <div class="card"><h2 class="section-title">Analyse détaillée</h2><p class="help-text">Les priorités, l’ancienneté, l’analyse par site, les motifs et l’évolution hebdomadaire sont disponibles dans l’onglet Pilotage.</p></div>
   `;
 }
 
@@ -1050,10 +1045,14 @@ function viewSaisie(){
           ${STATUSES.map(status => `<option value="${esc(status)}" ${status===(prefill?.status || "Immobilisé")?'selected':''}>${esc(status)}</option>`).join("")}
         </select>
 
-        <label>Motif / anomalie</label>
-        <select name="motif">
-          ${MOTIFS.map(motif => `<option value="${esc(motif)}" ${motif===(prefill?.motif || "Aucune")?'selected':''}>${esc(motif)}</option>`).join("")}
+        <label>Motifs / anomalies (plusieurs choix possibles)</label>
+        <select name="motif" multiple size="5" aria-label="Sélectionner un ou plusieurs motifs">
+          ${MOTIFS.map(motif => {
+            const selected = normalizeMotifs(prefill?.motifs || prefill?.motif).includes(motif);
+            return `<option value="${esc(motif)}" ${selected?'selected':''}>${esc(motif)}</option>`;
+          }).join("")}
         </select>
+        <div class="help-text">Sélectionner plusieurs motifs, par exemple : Frein + Caisse.</div>
 
         <label>Étiquette mod:</label>
         <select name="isolation">
@@ -1106,7 +1105,7 @@ function wagonCardHTML(e){
           <span class="meta-tag">${esc(e.site)}</span>
           <span class="meta-tag">${esc(e.serie)}</span>
           <span class="meta-tag">Sem. ${esc(e.week)}</span>
-          ${e.motif && e.motif !== "Aucune" ? `<span class="meta-tag">${esc(e.motif)}</span>` : ""}
+          ${e.motif && e.motif !== "Aucune" ? `<span class="meta-tag">${esc(motifsLabel(e.motifs || e.motif))}</span>` : ""}
           ${e.isolation && e.isolation !== "Aucun" ? `<span class="meta-tag">Étiquette mod: ${esc(e.isolation)}</span>` : ""}
           ${isReformPending(e) ? `<span class="meta-tag">Réforme en cours</span>` : ""}
         </div>
@@ -1132,7 +1131,7 @@ function viewPilotage(){
     .sort((a,b)=>b.days-a.days || a.entry.wagon.localeCompare(b.entry.wagon));
   const aged7=ages.filter(x=>x.days>=7).length, aged15=ages.filter(x=>x.days>=15).length, aged30=ages.filter(x=>x.days>=30).length;
   const motifMap=new Map();
-  currentProblems.forEach(e=>{const m=e.motif||"Aucune";motifMap.set(m,(motifMap.get(m)||0)+1);});
+  currentProblems.forEach(e=>{normalizeMotifs(e.motifs || e.motif).forEach(m=>{ if(m!=="Aucune") motifMap.set(m,(motifMap.get(m)||0)+1); });});
   const motifs=[...motifMap.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,8);
   const siteRows=SITES.map(site=>{
     const rows=allLatest.filter(e=>e.site===site);
@@ -1163,6 +1162,7 @@ function viewPilotage(){
   <div class="card"><h2 class="section-title">Analyse par site</h2>${siteRows}</div>
   <div class="card"><h2 class="section-title">Motifs des situations en cours</h2>${motifRows}</div>
   <div class="card"><h2 class="section-title">Évolution hebdomadaire</h2><div class="muted-small" style="display:grid;grid-template-columns:72px 1fr 1fr 1fr;gap:8px;margin-bottom:6px"><span>Semaine</span><span style="text-align:center">Imm.</span><span style="text-align:center">Dispo.</span><span style="text-align:center">Réf.</span></div>${weeklyRows}</div>
+  ${auditPanelHTML()}
   <div class="card"><h2 class="section-title">Décisions à préparer</h2><div class="attention-row"><b>1. Wagons ≥ 15 jours</b><div class="muted-small">Identifier le responsable, le blocage et la prochaine échéance.</div></div><div class="attention-row"><b>2. Réformes en cours</b><div class="muted-small">Vérifier la situation d'acheminement et les actions restantes.</div></div><div class="attention-row"><b>3. Écarts entre sites</b><div class="muted-small">Comparer les volumes en cours et les délais afin de cibler les relances.</div></div></div>`;
 }
 function viewUsers(){
@@ -1221,8 +1221,9 @@ function viewExport(){
 
     <div class="card">
       <h2 class="section-title">Sécurité des données</h2>
-      <ul class="security-list"><li>Chaque enregistrement possède son propre identifiant et numéro de séquence.</li><li>Les nouvelles saisies n'écrasent pas les anciennes.</li><li>Une saisie annulée reste visible dans l'historique.</li><li>Les données restent sur cet appareil et ce navigateur : elles ne sont pas synchronisées entre téléphones.</li></ul>
-    </div>`;
+      <ul class="security-list"><li>Chaque enregistrement possède son propre identifiant et numéro de séquence.</li><li>Les nouvelles saisies n'écrasent pas les anciennes.</li><li>Une saisie annulée reste visible dans l'historique.</li><li>Les données restent sur cet appareil et ce navigateur : elles ne sont pas synchronisées entre téléphones.</li><li>Les mots de passe du prototype local ne doivent pas être utilisés comme système de production.</li></ul>
+    </div>
+    ${auditPanelHTML()}`;
 }
 
 function reportRows(){
@@ -1242,7 +1243,7 @@ function reportSnapshot(){
   const inPeriod=latestPerWagon(rows);
   const currentProblems=inPeriod.filter(e=>problemStatus(e.status));
   const reformes=inPeriod.filter(e=>isReformPending(e)).length;
-  const anomalies=rows.filter(e=>e.motif && e.motif!=="Aucune").length;
+  const anomalies=rows.reduce((n,e)=>n+motifList(e.motifs || e.motif).length,0);
   const resolved=rows.filter(e=>e.status==="Disponible").length;
   const bySite=SITES.map(s=>({site:s,wagons:all.filter(e=>e.site===s).length,imm:all.filter(e=>e.site===s&&(e.status==="Immobilisé" || isReformPending(e))).length,repar:all.filter(e=>e.site===s&&e.status==="En réparation").length,attente:all.filter(e=>e.site===s&&e.status==="En attente").length,reforme:all.filter(e=>e.site===s&&isReformPending(e)).length})).filter(x=>site==="Tous"||x.site===site);
   const motifMap={}; currentProblems.forEach(e=>{const m=e.motif||"Aucune"; motifMap[m]=(motifMap[m]||0)+1;});
@@ -1349,20 +1350,29 @@ nav.tabbar button.active{color:#15557D;background:#E3EFF7}
 .age-badge.a15{color:#B36A00;background:#FFF1C9}
 .age-badge.a30{color:#D73540;background:#FCE3E5}
 
-</style></head><body><h1>${escHtml(reportTitle(r))}</h1><div class="meta">Période : ${escHtml(reportPeriodLabel(r))} · Généré le ${escHtml(new Date().toLocaleString("fr-FR"))}</div><h2>1. Synthèse KPI</h2><div class="kpi"><div class="box"><b>${k.liberes}</b><span>Wagons remis à disposition</span></div><div class="box"><b>${k.nouveaux}</b><span>Nouveaux immobilisés</span></div><div class="box"><b>${k.liberes}</b><span>Wagons libérés / disponibles</span></div><div class="box"><b>${k.reformes}</b><span>Réformés actuellement</span></div><div class="box"><b>${k.anomalies}</b><span>Anomalies / motifs renseignés</span></div><div class="box"><b>${k.resolved}</b><span>Situations saisies comme disponibles</span></div><div class="box"><b>${k.taux}%</b><span>Taux indicatif de disponibilité des saisies</span></div><div class="box"><b>${k.actions}</b><span>Situations en réparation / attente</span></div></div><p class="meta">Ancienneté des épisodes en cours : ≥7 j : ${k.age7} · ≥15 j : ${k.age15} · ≥30 j : ${k.age30}. Ces seuils sont des seuils de pilotage de l'application, pas des seuils réglementaires.</p><h2>2. Répartition par site</h2><table><thead><tr><th>Site</th><th>Wagons suivis</th><th>Immobilisés</th><th>En réparation</th><th>En attente</th><th>Réformés</th></tr></thead><tbody>${siteRows||'<tr><td colspan="6">Aucune donnée</td></tr>'}</tbody></table><h2>3. Motifs des situations en cours</h2><table><thead><tr><th>Motif</th><th>Nombre</th></tr></thead><tbody>${motifRows||'<tr><td colspan="2">Aucune donnée</td></tr>'}</tbody></table><h2>4. Activité par semaine</h2><table><thead><tr><th>Semaine</th><th>Saisies</th><th>Immobilisés</th><th>Disponibles</th><th>Réformés</th></tr></thead><tbody>${weekRows||'<tr><td colspan="5">Aucune donnée</td></tr>'}</tbody></table><h2>5. Graphiques</h2><div class="chart"><h3>Activité par semaine</h3>${svgActivity(r)}</div><div class="chart"><h3>Wagons suivis par site</h3>${svgSites(r)}</div><div class="chart"><h3>Top motifs des situations en cours</h3>${svgMotifs(r)}</div><h2>6. Données nominatives</h2><table><thead><tr><th>Wagon</th><th>Site</th><th>Série</th><th>Situation</th><th>Motif</th><th>Agent</th><th>Date</th></tr></thead><tbody>${r.inPeriod.map(e=>`<tr><td>${escHtml(e.wagon)}</td><td>${escHtml(e.site)}</td><td>${escHtml(e.serie)}</td><td>${escHtml(e.status)}</td><td>${escHtml(e.motif)}</td><td>${escHtml(e.visitor)}</td><td>${escHtml(fmtDateTime(e.created_at))}</td></tr>`).join("")||'<tr><td colspan="7">Aucune donnée</td></tr>'}</tbody></table><p class="meta">Document généré automatiquement à partir des saisies conservées dans l'application. Vérifier les données avant diffusion.</p></body></html>`;
+select[multiple]{min-height:130px} select[multiple] option{padding:6px} </style></head><body><h1>${escHtml(reportTitle(r))}</h1><div class="meta">Période : ${escHtml(reportPeriodLabel(r))} · Généré le ${escHtml(new Date().toLocaleString("fr-FR"))}</div><h2>1. Synthèse KPI</h2><div class="kpi"><div class="box"><b>${k.liberes}</b><span>Wagons remis à disposition</span></div><div class="box"><b>${k.nouveaux}</b><span>Nouveaux immobilisés</span></div><div class="box"><b>${k.liberes}</b><span>Wagons libérés / disponibles</span></div><div class="box"><b>${k.reformes}</b><span>Réformés actuellement</span></div><div class="box"><b>${k.anomalies}</b><span>Anomalies / motifs renseignés</span></div><div class="box"><b>${k.resolved}</b><span>Situations saisies comme disponibles</span></div><div class="box"><b>${k.taux}%</b><span>Taux indicatif de disponibilité des saisies</span></div><div class="box"><b>${k.actions}</b><span>Situations en réparation / attente</span></div></div><p class="meta">Ancienneté des épisodes en cours : ≥7 j : ${k.age7} · ≥15 j : ${k.age15} · ≥30 j : ${k.age30}. Ces seuils sont des seuils de pilotage de l'application, pas des seuils réglementaires.</p><h2>2. Répartition par site</h2><table><thead><tr><th>Site</th><th>Wagons suivis</th><th>Immobilisés</th><th>En réparation</th><th>En attente</th><th>Réformés</th></tr></thead><tbody>${siteRows||'<tr><td colspan="6">Aucune donnée</td></tr>'}</tbody></table><h2>3. Motifs des situations en cours</h2><table><thead><tr><th>Motif</th><th>Nombre</th></tr></thead><tbody>${motifRows||'<tr><td colspan="2">Aucune donnée</td></tr>'}</tbody></table><h2>4. Activité par semaine</h2><table><thead><tr><th>Semaine</th><th>Saisies</th><th>Immobilisés</th><th>Disponibles</th><th>Réformés</th></tr></thead><tbody>${weekRows||'<tr><td colspan="5">Aucune donnée</td></tr>'}</tbody></table><h2>5. Graphiques</h2><div class="chart"><h3>Activité par semaine</h3>${svgActivity(r)}</div><div class="chart"><h3>Wagons suivis par site</h3>${svgSites(r)}</div><div class="chart"><h3>Top motifs des situations en cours</h3>${svgMotifs(r)}</div><h2>6. Données nominatives</h2><table><thead><tr><th>Wagon</th><th>Site</th><th>Série</th><th>Situation</th><th>Motif</th><th>Agent</th><th>Date</th></tr></thead><tbody>${r.inPeriod.map(e=>`<tr><td>${escHtml(e.wagon)}</td><td>${escHtml(e.site)}</td><td>${escHtml(e.serie)}</td><td>${escHtml(e.status)}</td><td>${escHtml(e.motif)}</td><td>${escHtml(e.visitor)}</td><td>${escHtml(fmtDateTime(e.created_at))}</td></tr>`).join("")||'<tr><td colspan="7">Aucune donnée</td></tr>'}</tbody></table><p class="meta">Document généré automatiquement à partir des saisies conservées dans l'application. Vérifier les données avant diffusion.</p></body></html>`;
 }
 function downloadBlob(content,filename,type){
   try{
     const blob=new Blob([content],{type});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
-    a.href=url; a.download=filename; a.rel="noopener";
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    a.href=url; a.download=filename; a.rel="noopener"; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{try{a.remove();}catch(_){} try{URL.revokeObjectURL(url);}catch(_){}},10000);
     return true;
   }catch(err){
-    showToast("Téléchargement impossible : "+(err?.message||"erreur"));
-    return false;
+    try{
+      const a=document.createElement("a");
+      a.href="data:"+type+","+encodeURIComponent(content);
+      a.download=filename; a.rel="noopener";
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>a.remove(),1000);
+      return true;
+    }catch(fallbackErr){
+      showToast("Téléchargement impossible : "+(fallbackErr?.message||err?.message||"erreur"));
+      return false;
+    }
   }
 }
 function reportFilename(ext){return `bilan_wagons_fret_${new Date().toISOString().slice(0,10)}.${ext}`;}
@@ -1420,7 +1430,7 @@ function openHistory(wagon){
           <div class="dot" style="background:${col.c}"></div>
           <div class="when">${fmtDateTime(e.created_at)} · Semaine ${esc(e.week)}</div>
           <div class="st" style="color:${col.c}">${esc(e.status)}</div>
-          <div class="det">${esc(e.site)} · ${esc(e.serie)}${e.motif && e.motif!=="Aucune" ? " · " + esc(e.motif) : ""}${e.isolation && e.isolation!=="Aucun" ? " · étiquette mod: " + esc(e.isolation) : ""}</div>
+          <div class="det">${esc(e.site)} · ${esc(e.serie)}${e.motif && e.motif!=="Aucune" ? " · " + esc(motifsLabel(e.motifs || e.motif)) : ""}${e.isolation && e.isolation!=="Aucun" ? " · étiquette mod: " + esc(e.isolation) : ""}</div>
           ${e.observation ? `<div class="det">${esc(e.observation)}</div>` : ""}
           <div class="card-foot">${esc(e.visitor || "Agent non renseigné")}</div>
           ${e.cancelled_at ? `<div class="det" style="color:var(--red)">Saisie annulée le ${fmtDateTime(e.cancelled_at)}${e.cancelled_reason ? " · " + esc(e.cancelled_reason) : ""}</div>` : `<button class="hist-cancel" data-id="${esc(e.id)}">Annuler cette saisie</button>`}
@@ -1473,6 +1483,37 @@ function downloadCSV(content, filename){
 }
 
 /* ---------- Event handlers ---------- */
+function validateEntryData(entry){
+  const errors=[];
+  if(!/^\\d{7}$/.test(String(entry.wagon||""))) errors.push("Le numéro de wagon doit comporter 7 chiffres.");
+  if(!SITES.includes(entry.site)) errors.push("Le site est obligatoire.");
+  if(!SERIES.includes(entry.serie)) errors.push("La série est invalide.");
+  if(!STATUSES.includes(entry.status)) errors.push("La situation est invalide.");
+  if(!normalizeMotifs(entry.motifs || entry.motif).every(m=>MOTIFS.includes(m))) errors.push("Un motif est invalide.");
+  if(!ISOLATION_CODES.includes(entry.isolation)) errors.push("L'étiquette de modification est invalide.");
+  if(!entry.visitor) errors.push("L'agent doit être identifié.");
+  if(!entry.created_at || Number.isNaN(new Date(entry.created_at).getTime())) errors.push("La date est invalide.");
+  return errors;
+}
+function auditDataQuality(){
+  const rows=activeEntries(), issues=[], ids=new Set();
+  rows.forEach(e=>{
+    const errors=validateEntryData(e);
+    if(ids.has(e.id)) errors.push("Identifiant dupliqué.");
+    ids.add(e.id);
+    if(errors.length) issues.push({wagon:e.wagon||"—",seq:e.seq||"—",errors});
+  });
+  return {total:entries.length,active:rows.length,cancelled:entries.filter(e=>e.cancelled_at).length,issues};
+}
+function auditPanelHTML(){
+  const a=auditDataQuality(), ok=a.issues.length===0;
+  return `<div class="card"><h2 class="section-title">Contrôle qualité des données</h2>
+  <div class="storage-status ${ok?"ok":"bad"}"><span class="dot"></span><div><strong>${ok?"Aucune anomalie structurelle détectée":"Anomalies à vérifier"}</strong>
+  <div class="small">${a.total} saisies conservées · ${a.active} actives · ${a.cancelled} annulées · ${a.issues.length} anomalie(s)</div></div></div>
+  ${ok?`<p class="help-text">Les champs essentiels, statuts, sites et identifiants ont été contrôlés localement.</p>`:
+  `<div class="attention-table">${a.issues.slice(0,10).map(x=>`<div class="attention-row"><b>Wagon ${esc(x.wagon)} · séquence ${esc(x.seq)}</b><div class="muted-small">${esc(x.errors.join(" "))}</div></div>`).join("")}</div>`}
+  <p class="help-text">Contrôle local uniquement : une authentification serveur reste nécessaire pour la production.</p></div>`;
+}
 function safeExport(label, fn){ try { fn(); } catch(err) { showToast(label+" : "+(err?.message||"erreur")); } }
 function attachV10Handlers(){
   document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>{state.view=b.dataset.go;render();}));
@@ -1539,13 +1580,15 @@ function attachViewHandlers(){
         wagon,
         serie: fd.get("serie"),
         status: fd.get("status"),
-        motif: fd.get("motif"),
+        motifs: Array.from(form.querySelector('select[name="motif"]').selectedOptions).map(o=>o.value),
+        motif: motifsLabel(Array.from(form.querySelector('select[name="motif"]').selectedOptions).map(o=>o.value)),
         isolation: fd.get("isolation"),
         observation: fd.get("observation").trim(),
         visitor: currentUser.username,
         created_at: new Date().toISOString()
       };
-      if(!entry.site){ showToast("Merci de choisir un site"); return; }
+      const validationErrors=validateEntryData(entry);
+      if(validationErrors.length){ showToast(validationErrors[0]); return; }
       entries.push(entry);
       const ok = await saveEntries();
       if(ok){
@@ -1609,7 +1652,7 @@ function attachViewHandlers(){
       const rows = latestPerWagon(entries).sort((a,b)=>a.site.localeCompare(b.site)||a.wagon.localeCompare(b.wagon));
       const csv = toCSV(rows,
         ["Wagon","Site","Série","Semaine","Situation","Réforme en cours","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
-        r => [r.wagon,r.site,r.serie,r.week,r.status,isReformPending(r)?"Oui":"Non",r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
+        r => [r.wagon,r.site,r.serie,r.week,r.status,isReformPending(r)?"Oui":"Non",motifsLabel(r.motifs || r.motif),r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
       );
       downloadCSV(csv, "situation_actuelle_wagons_fret.csv");
     });
@@ -1618,7 +1661,7 @@ function attachViewHandlers(){
       const rows = [...entries].sort((a,b)=>a.created_at.localeCompare(b.created_at));
       const csv = toCSV(rows,
         ["N° séquence","Identifiant","Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le","Annulée le","Motif annulation"],
-        r => [r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at ? fmtDateTime(r.cancelled_at) : "",r.cancelled_reason]
+        r => [r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,motifsLabel(r.motifs || r.motif),r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at ? fmtDateTime(r.cancelled_at) : "",r.cancelled_reason]
       );
       downloadCSV(csv, "historique_complet_wagons_fret.csv");
     });
@@ -1632,11 +1675,10 @@ function attachViewHandlers(){
         total_entries: entries.length,
         entries: entries
       };
-      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json;charset=utf-8"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href=url; a.download="sauvegarde_suivi_wagons_fret_"+new Date().toISOString().slice(0,10)+".json";
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-      showToast("Sauvegarde complète créée");
+      const ok = downloadBlob(JSON.stringify(backup, null, 2),
+        "sauvegarde_suivi_wagons_fret_"+new Date().toISOString().slice(0,10)+".json",
+        "application/json;charset=utf-8");
+      if(ok) showToast("Sauvegarde complète créée");
     });
 
     const importBtn = document.getElementById("importBackup");
