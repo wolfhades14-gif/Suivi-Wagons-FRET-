@@ -1613,6 +1613,16 @@ function attachViewHandlers(){
     if(!form) return;
     const wagonInput = form.querySelector('input[name="wagon"]');
     const serieSelect = form.querySelector('select[name="serie"]');
+    const statusSelect = form.querySelector('select[name="status"]');
+    const isolationSelect = form.querySelector('select[name="isolation"]');
+    // Règle métier : un wagon déclaré Disponible ne porte plus d’étiquette de modification.
+    function syncIsolationWithStatus(){
+      if(statusSelect?.value === "Disponible" && isolationSelect){
+        isolationSelect.value = "Aucun";
+      }
+    }
+    statusSelect?.addEventListener("change", syncIsolationWithStatus);
+    syncIsolationWithStatus();
     let serieAutoSet = false; // tracks whether the current value was set automatically
     wagonInput.addEventListener("input", () => {
       const matched = serieFromWagon(wagonInput.value.trim());
@@ -1665,7 +1675,7 @@ function attachViewHandlers(){
           serie: String(fd.get("serie") || SERIES[0]),
           status: String(fd.get("status") || "Immobilisé"),
           motif: motifLabel(selectedMotifs.concat(noneSelected ? ["Aucune"] : []).filter(x=>x!=="Aucune" || noneSelected)),
-          isolation: String(fd.get("isolation") || "Aucun"),
+          isolation: String(fd.get("status") || "Immobilisé") === "Disponible" ? "Aucun" : String(fd.get("isolation") || "Aucun"),
           observation: String(fd.get("observation") || "").trim(),
           visitor: currentUser.username,
           created_at: new Date().toISOString()
