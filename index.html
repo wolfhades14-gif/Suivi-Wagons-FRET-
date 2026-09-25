@@ -1672,7 +1672,7 @@ function attachViewHandlers(){
           seq: nextSeq,
           record_version: 1,
           week: String(fd.get("week") || isoWeekDefault()).trim(),
-          site: isVisitor() ? currentUser.site : String(fd.get("site") || ""),
+          site: String(fd.get("site") || ""),
           wagon,
           serie: String(fd.get("serie") || SERIES[0]),
           status: String(fd.get("status") || "Immobilisé"),
