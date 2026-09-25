@@ -831,7 +831,7 @@ function renderHeaderChips(){
   const chipUser = document.getElementById("currentUserChip");
   if(chipUser) chipUser.innerHTML = `<span class="role-pill">${esc(roleLabel())}</span>`;
   document.getElementById("logoutBtn")?.addEventListener("click",async()=>{ await clearSession(); location.reload(); });
-  const latest = isVisitor() ? latestPerWagon(entries).filter(e=>e.visitor===currentUser.username) : latestPerWagon(entries);
+  const latest = latestPerWagon(entries);
   const counts = {};
   STATUSES.forEach(s => counts[s] = 0);
   latest.forEach(e => { if(counts[e.status] !== undefined) counts[e.status]++; });
