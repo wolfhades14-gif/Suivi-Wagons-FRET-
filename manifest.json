@@ -1,12 +1,12 @@
 {
   "name": "Suivi Wagons FRET",
   "short_name": "Wagons FRET",
-  "start_url": "./index.html?v=20",
+  "start_url": "./index.html?v=22",
   "scope": "./",
   "display": "standalone",
   "background_color": "#EEF3F7",
   "theme_color": "#15557D",
-  "description": "Suivi opérationnel du matériel remorqué FRET - V20",
+  "description": "Suivi opérationnel du matériel remorqué FRET - V22",
   "icons": [
     {
       "src": "icon-192.png",

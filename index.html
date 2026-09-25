@@ -541,6 +541,8 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
   <div class="modal-sheet" id="modalSheet"></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./supabase-config.js"></script>
 <script>
 /* ---------- Reference data ---------- */
 const SITES = ["Beni Ansar (Gare)","Beni Ansar (Port)","Selouane","Hassi Blal"];
@@ -579,144 +581,170 @@ function motifLabel(values){
 }
 const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
 
-/* ---------- State ---------- */
+/* ---------- State / Supabase cloud ---------- */
 let entries = [];
 let storageOk = true;
 let lastSavedAt = null;
 let currentUser = null;
 let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null, dashboardSite: "Tous", dashboardStatus: "Tous", prefillWagon: null, prefillEntryId: null };
+const STORAGE_VERSION = 22;
+const LOCAL_BACKUP_KEY = "wagons-fret-history-backup-v22";
+let supabaseClient = null;
+let realtimeChannel = null;
 
-// V4: append-only local history. Every submission gets its own record and is never overwritten.
-// The old key is retained so existing pilot data remains available after the upgrade.
-const STORAGE_KEY = "wagons-charbon-entries";
-const BACKUP_KEY = "wagons-fret-history-backup";
-const META_KEY = "wagons-fret-storage-meta";
-const STORAGE_VERSION = 20;
-const PREVIOUS_BACKUP_KEY = "wagons-fret-history-backup-previous";
-
-
-/* ---------- V10 · Users / roles (pilot local) ---------- */
-const USERS_KEY = "wagons-fret-users-v10";
-const SESSION_KEY = "wagons-fret-session-v10";
-const DEFAULT_USERS = [
-  {id:"ctrl-001", username:"controleur", name:"Contrôleur matériel", role:"controller", site:"Tous", password:"TMN2026"},
-  {id:"vis-001", username:"visiteur01", name:"Visiteur 01", role:"visitor", site:"Selouane", password:"1234"},
-  {id:"vis-002", username:"visiteur02", name:"Visiteur 02", role:"visitor", site:"Beni Ansar (Gare)", password:"1234"}
-];
-function loadUsers(){
-  try{
-    const raw=localStorage.getItem(USERS_KEY);
-    if(!raw){ localStorage.setItem(USERS_KEY, JSON.stringify(DEFAULT_USERS)); return [...DEFAULT_USERS]; }
-    const u=JSON.parse(raw); return Array.isArray(u)&&u.length ? u : [...DEFAULT_USERS];
-  }catch(e){ return [...DEFAULT_USERS]; }
+function getSupabaseClient(){
+  if(supabaseClient) return supabaseClient;
+  if(!window.supabase || !window.SUPABASE_CONFIG){ return null; }
+  if(!window.SUPABASE_CONFIG.url || !window.SUPABASE_CONFIG.publishableKey || window.SUPABASE_CONFIG.publishableKey.includes("REMPLACER_PAR")) return null;
+  supabaseClient = window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.publishableKey, {
+    auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}
+  });
+  return supabaseClient;
 }
-function saveUsers(users){ localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+function roleFromUser(user){
+  const email=(user?.email||"").toLowerCase();
+  const controllers=(window.SUPABASE_CONFIG?.controllerEmails||[]).map(x=>String(x).toLowerCase().trim()).filter(Boolean);
+  return controllers.includes(email) || user?.user_metadata?.role === "controller" ? "controller" : "visitor";
+}
+function buildCurrentUser(user){
+  const role=roleFromUser(user);
+  const meta=user?.user_metadata||{};
+  return {id:user.id, username:user.email||user.id, name:meta.name || (user.email ? user.email.split("@")[0] : "Utilisateur"), role, site:"Tous"};
+}
 function isController(){ return !!currentUser && currentUser.role === "controller"; }
 function isVisitor(){ return !!currentUser && currentUser.role === "visitor"; }
-function currentSession(){
-  try{ const raw=sessionStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
-}
-function setSession(user){
-  currentUser={id:user.id,username:user.username,name:user.name,role:user.role,site:user.site};
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
-}
-function clearSession(){ currentUser=null; sessionStorage.removeItem(SESSION_KEY); }
-function ensureSession(){
-  const s=currentSession();
-  if(!s) return false;
-  const user=loadUsers().find(u=>u.id===s.id && u.username===s.username && u.role===s.role);
-  if(!user) return false;
-  currentUser={id:user.id,username:user.username,name:user.name,role:user.role,site:user.site};
+function roleLabel(){ return isController() ? "Contrôleur matériel" : "Visiteur"; }
+function canAccessView(view){ return isController() || ["dashboard","saisie","situation"].includes(view); }
+async function ensureSession(){
+  const sb=getSupabaseClient();
+  if(!sb) return false;
+  const {data:{session},error}=await sb.auth.getSession();
+  if(error || !session?.user) return false;
+  currentUser=buildCurrentUser(session.user);
   return true;
 }
+async function clearSession(){
+  const sb=getSupabaseClient();
+  try{ if(sb) await sb.auth.signOut(); }catch(_){ }
+  currentUser=null;
+  if(realtimeChannel && sb){ try{ await sb.removeChannel(realtimeChannel); }catch(_){ } realtimeChannel=null; }
+}
 function renderLogin(){
+  const configured=!!getSupabaseClient();
   document.body.innerHTML=`<div class="auth-screen"><div class="auth-card">
     <h1>Suivi Wagons FRET</h1>
-    <p>Connectez-vous pour accéder à votre interface.</p>
-    <form id="loginForm">
-      <label>Compte</label><input name="username" autocomplete="username" placeholder="Identifiant" required>
+    <p>Connexion sécurisée au pilote TMN.</p>
+    ${configured?`<form id="loginForm">
+      <label>Adresse e-mail</label><input name="username" type="email" autocomplete="username" placeholder="visiteur01@..." required>
       <label>Mot de passe</label><input name="password" type="password" autocomplete="current-password" placeholder="Mot de passe" required>
       <button class="btn" type="submit">Se connecter</button>
     </form>
-    <div class="auth-help"><strong>Comptes de test :</strong> controleur / TMN2026 · visiteur01 / 1234 · visiteur02 / 1234<br><br>Prototype pilote : les comptes sont actuellement stockés localement sur cet appareil. La connexion Microsoft/OneDrive sera branchée après validation de l'architecture cloud.</div>
+    <div class="auth-help">Les comptes sont gérés dans Supabase Authentication. Les données des wagons sont centralisées et ne dépendent plus du stockage local du téléphone.</div>`:
+    `<div class="banner"><span>Configuration Supabase incomplète.</span></div><div class="auth-help">Renseigne la Publishable key dans <strong>supabase-config.js</strong>, puis recharge l'application.</div>`}
   </div></div>`;
-  document.getElementById("loginForm").addEventListener("submit",ev=>{
+  document.getElementById("loginForm")?.addEventListener("submit",async ev=>{
     ev.preventDefault();
-    const fd=new FormData(ev.currentTarget), username=String(fd.get("username")||"").trim(), password=String(fd.get("password")||"");
-    const user=loadUsers().find(u=>u.username===username && u.password===password);
-    if(!user){
+    const fd=new FormData(ev.currentTarget), email=String(fd.get("username")||"").trim(), password=String(fd.get("password")||"");
+    const sb=getSupabaseClient();
+    if(!sb) return;
+    const {data,error}=await sb.auth.signInWithPassword({email,password});
+    if(error || !data?.user){
       let err=document.getElementById("loginError");
-      if(!err){ err=document.createElement("div"); err.id="loginError"; err.style="color:var(--red);font-size:12px;margin-top:10px"; document.getElementById("loginForm").appendChild(err); }
-      err.textContent="Identifiant ou mot de passe incorrect.";
+      if(!err){err=document.createElement("div");err.id="loginError";err.style="color:var(--red);font-size:12px;margin-top:10px";document.getElementById("loginForm").appendChild(err);}
+      err.textContent=error?.message || "Connexion impossible.";
       return;
     }
-    setSession(user); location.reload();
+    currentUser=buildCurrentUser(data.user);
+    location.reload();
   });
 }
-function roleLabel(){ return isController() ? "Contrôleur matériel" : "Visiteur"; }
-function canAccessView(view){ return isController() || ["dashboard","saisie","situation"].includes(view); }
 
-/* ---------- Storage helpers ---------- */
+/* ---------- Cloud storage helpers ---------- */
 function normalizeEntries(list){
-  return (Array.isArray(list) ? list : []).map((e, i) => ({
+  return (Array.isArray(list) ? list : []).map((e,i)=>({
     ...e,
-    id: e.id || ("legacy-" + i + "-" + Date.now().toString(36)),
-    seq: Number.isFinite(e.seq) ? e.seq : i + 1,
-    cancelled_at: e.cancelled_at || null,
-    cancelled_reason: e.cancelled_reason || ""
+    id:e.id || ("legacy-"+i+"-"+Date.now().toString(36)),
+    seq:Number.isFinite(Number(e.seq)) ? Number(e.seq) : i+1,
+    cancelled_at:e.cancelled_at || null,
+    cancelled_reason:e.cancelled_reason || ""
   }));
 }
+function rowToEntry(r,i){
+  return {
+    id:r.entry_uid || String(r.id),
+    seq:Number(r.seq)||Number(r.id)||i+1,
+    record_version:Number(r.record_version)||1,
+    week:r.week || "",
+    site:r.site || "",
+    wagon:r.numero_wagon || "",
+    serie:r.serie || SERIES[0],
+    status:r.situation || "Immobilisé",
+    motif:r.motif || "Aucune",
+    isolation:r.etiquette_mod || "Aucun",
+    observation:r.observation || "",
+    visitor:r.utilisateur || "",
+    created_at:r.created_at || r.date_maj || new Date().toISOString(),
+    cancelled_at:r.cancelled_at || null,
+    cancelled_reason:r.cancelled_reason || ""
+  };
+}
+function entryToRow(e){
+  return {
+    entry_uid:e.id,
+    seq:Number(e.seq)||0,
+    record_version:Number(e.record_version)||1,
+    week:e.week||"",
+    numero_wagon:e.wagon,
+    site:e.site,
+    serie:e.serie||SERIES[0],
+    situation:e.status,
+    motif:e.motif||"Aucune",
+    etiquette_mod:e.status === "Disponible" ? "Aucun" : (e.isolation||"Aucun"),
+    observation:e.observation||"",
+    utilisateur:e.visitor || currentUser?.username || "",
+    created_at:e.created_at || new Date().toISOString(),
+    date_maj:new Date().toISOString(),
+    cancelled_at:e.cancelled_at||null,
+    cancelled_reason:e.cancelled_reason||null
+  };
+}
 async function loadEntries(){
+  const sb=getSupabaseClient();
+  if(!sb){storageOk=false;entries=[];return false;}
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const backup = localStorage.getItem(BACKUP_KEY);
-    const previousBackup = localStorage.getItem(PREVIOUS_BACKUP_KEY);
-    let parsed = null;
-    if(raw){
-      try { parsed = JSON.parse(raw); } catch(e) { parsed = null; }
-    }
-    if(!parsed && backup){
-      try { parsed = JSON.parse(backup); } catch(e) { parsed = null; }
-    }
-    if(!parsed && previousBackup){
-      try { parsed = JSON.parse(previousBackup); } catch(e) { parsed = null; }
-    }
-    entries = normalizeEntries(parsed || []);
-    const metaRaw = localStorage.getItem(META_KEY);
-    const meta = metaRaw ? JSON.parse(metaRaw) : {};
-    lastSavedAt = meta.lastSavedAt || null;
-    storageOk = true;
-    // Repair/upgrade old records once, without changing their content.
-    if(entries.some((e,i) => !e.id || !Number.isFinite(e.seq))) await saveEntries();
+    const {data,error}=await sb.from("wagons").select("*").order("seq",{ascending:true}).order("created_at",{ascending:true});
+    if(error) throw error;
+    entries=(data||[]).map(rowToEntry);
+    lastSavedAt=entries.length ? entries.map(e=>e.created_at).sort().slice(-1)[0] : null;
+    storageOk=true;
+    return true;
   }catch(e){
-    storageOk = false;
-    entries = [];
+    console.error(e); storageOk=false; entries=[]; return false;
   }
 }
 async function saveEntries(){
+  const sb=getSupabaseClient();
+  if(!sb || !currentUser){storageOk=false;return false;}
   try{
-    const payload = JSON.stringify(entries);
-    // V5: keep a previous snapshot before replacing the main record.
-    const current = localStorage.getItem(STORAGE_KEY);
-    if(current) localStorage.setItem(PREVIOUS_BACKUP_KEY, current);
-    // Main backup + main data. If the main write fails, the previous snapshot remains available.
-    localStorage.setItem(BACKUP_KEY, payload);
-    localStorage.setItem(STORAGE_KEY, payload);
-    lastSavedAt = new Date().toISOString();
-    localStorage.setItem(META_KEY, JSON.stringify({
-      version:STORAGE_VERSION,
-      lastSavedAt,
-      totalEntries:entries.length,
-      lastSeq:entries.reduce((m,e)=>Math.max(m,Number(e.seq)||0),0)
-    }));
-    storageOk = true;
+    const rows=entries.map(entryToRow);
+    if(rows.length){
+      const {error}=await sb.from("wagons").upsert(rows,{onConflict:"entry_uid"});
+      if(error) throw error;
+    }
+    lastSavedAt=new Date().toISOString();
+    storageOk=true;
+    try{localStorage.setItem(LOCAL_BACKUP_KEY,JSON.stringify({app:"Suivi Wagons FRET",version:STORAGE_VERSION,exported_at:lastSavedAt,entries}));}catch(_){ }
     return true;
-  }catch(e){
-    storageOk = false;
-    return false;
-  }
+  }catch(e){console.error(e);storageOk=false;return false;}
 }
-function activeEntries(){ return entries.filter(e => !e.cancelled_at); }
+function activeEntries(){ return entries.filter(e=>!e.cancelled_at); }
+function subscribeRealtime(){
+  const sb=getSupabaseClient(); if(!sb || realtimeChannel) return;
+  realtimeChannel=sb.channel("wagons-realtime")
+    .on("postgres_changes",{event:"*",schema:"public",table:"wagons"},async()=>{
+      const view=state.view; await loadEntries(); if(currentUser){render(); if(view==="saisie") state.view="saisie";}
+    }).subscribe();
+}
 
 /* ---------- Utilities ---------- */
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -776,15 +804,8 @@ function reformPendingRows(list = latestPerWagon(entries)){
 function filteredSituation(){
   let latest = latestPerWagon(entries);
   const query = state.search.trim();
-  if(isVisitor()){
-    // Visitor: the normal situation remains limited to the assigned site.
-    // When a wagon number is searched, the search becomes global so a visitor
-    // can locate a wagon that is currently followed at another site (for example
-    // a wagon reformed at Selouane while the visitor is at Beni Ansar).
-    if(!query) latest = latest.filter(e => e.site === currentUser.site);
-  } else if(state.filterSite !== "Tous") {
-    latest = latest.filter(e => e.site === state.filterSite);
-  }
+  // V22: all authenticated visitors can consult all three perimeters.
+  if(state.filterSite !== "Tous") latest = latest.filter(e => e.site === state.filterSite);
   if(query) latest = latest.filter(e => e.wagon.includes(query));
   latest.sort((a,b) => a.site.localeCompare(b.site) || a.wagon.localeCompare(b.wagon));
   return latest;
@@ -809,7 +830,7 @@ function render(){
 function renderHeaderChips(){
   const chipUser = document.getElementById("currentUserChip");
   if(chipUser) chipUser.innerHTML = `<span class="role-pill">${esc(roleLabel())}</span>`;
-  document.getElementById("logoutBtn")?.addEventListener("click",()=>{ clearSession(); location.reload(); });
+  document.getElementById("logoutBtn")?.addEventListener("click",async()=>{ await clearSession(); location.reload(); });
   const latest = isVisitor() ? latestPerWagon(entries).filter(e=>e.visitor===currentUser.username) : latestPerWagon(entries);
   const counts = {};
   STATUSES.forEach(s => counts[s] = 0);
@@ -1038,7 +1059,7 @@ function viewDashboard(){
 
 function viewSaisie(){
   const prefill = state.prefillWagon ? historyForWagon(state.prefillWagon).slice(-1)[0] : null;
-  const selectedSite = isVisitor() ? currentUser.site : (prefill?.site || "");
+  const selectedSite = prefill?.site || SITES[0];
   const selectedSerie = prefill?.serie || (state.prefillWagon ? serieFromWagon(state.prefillWagon) : null) || SERIES[0];
   return `
     <div class="card">
@@ -1049,7 +1070,7 @@ function viewSaisie(){
         <input type="text" name="week" value="${esc(isoWeekDefault())}" required>
 
         <label>Site</label>
-        <select name="site" required ${isVisitor() ? "disabled" : ""}>
+        <select name="site" required>
           <option value="">Choisir un site</option>
           ${SITES.map(site => `<option value="${esc(site)}" ${site===selectedSite?'selected':''}>${esc(site)}</option>`).join("")}
         </select>
@@ -1191,13 +1212,12 @@ function viewPilotage(){
 }
 function viewUsers(){
   if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
-  const users=loadUsers();
-  return `<div class="card"><h2 class="section-title">Comptes visiteurs</h2>
-    <form id="userForm"><label>Nom du visiteur</label><input name="name" required placeholder="Visiteur 03"><label>Identifiant</label><input name="username" required placeholder="visiteur03"><label>Mot de passe</label><input name="password" required value="1234"><label>Site</label><select name="site">${SITES.map(x=>`<option>${esc(x)}</option>`).join("")}</select><button class="btn" type="submit">＋ Créer le compte</button></form></div>
-    <div class="card"><h2 class="section-title">Utilisateurs</h2><div class="user-list">${users.map(u=>`<div class="user-item"><div class="top"><strong>${esc(u.name)}</strong><span class="role-pill">${u.role==="controller"?"Contrôleur":"Visiteur"}</span></div><small>${esc(u.username)} · ${esc(u.site)}</small>${u.role!=="controller"?`<button class="danger-btn" data-disable-user="${esc(u.id)}">Désactiver</button>`:""}</div>`).join("")}</div></div>
-    <div class="card"><h2 class="section-title">Stockage pilote</h2><div class="cloud-note"><strong>OneDrive personnel :</strong> pour ce pilote, l'application garde les données localement. Tu peux exporter la mémoire JSON puis la déposer manuellement dans ton OneDrive. La synchronisation automatique nécessite une autorisation Microsoft/API qui n'est pas encore configurée.</div><a class="btn secondary cloud-link" href="https://onedrive.live.com/" target="_blank" rel="noopener">Ouvrir OneDrive</a></div>`;
+  return `<div class="card"><h2 class="section-title">Comptes utilisateurs</h2>
+    <p class="help-text">Les comptes visiteurs sont maintenant gérés dans <strong>Supabase → Authentication → Users</strong>. Pour le pilote, crée les comptes individuellement dans Supabase. Cette page ne stocke plus de mots de passe dans le téléphone.</p>
+    <div class="storage-status"><span class="dot"></span><div><strong>Authentification centralisée active</strong><div class="small">Les sessions sont gérées par Supabase Auth.</div></div></div>
+  </div>
+  <div class="card"><h2 class="section-title">Accès du pilote</h2><ul class="security-list"><li>10 comptes visiteurs prévus pour le test.</li><li>Les visiteurs consultent Beni Ansar, Selouane et Hassi Blal.</li><li>Le compte Contrôleur est identifié par l’adresse configurée dans <strong>supabase-config.js</strong>.</li><li>Aucun mot de passe n’est enregistré dans le code ou le stockage local.</li></ul></div>`;
 }
-
 function viewExport(){
   if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
   const latest = latestPerWagon(entries);
@@ -1582,24 +1602,6 @@ function safeExport(label, fn){ try { fn(); } catch(err) { showToast(label+" : "
 function attachV10Handlers(){
   document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>{state.view=b.dataset.go;render();}));
   document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>{if(b.hasAttribute("data-controller-only")&&!isController())return;state.view=b.dataset.view;render();}));
-  if(isVisitor()){
-    const form=document.getElementById("saisieForm");
-    const site=form?.querySelector('select[name="site"]');
-    if(site){ site.value=currentUser.site; site.disabled=true; }
-  }
-  if(state.view==="users" && isController()){
-    const form=document.getElementById("userForm");
-    form?.addEventListener("submit",ev=>{
-      ev.preventDefault(); const fd=new FormData(form); const users=loadUsers();
-      const username=String(fd.get("username")||"").trim();
-      if(!username || users.some(u=>u.username===username)){showToast("Identifiant déjà utilisé");return;}
-      users.push({id:"vis-"+uid(),username,name:String(fd.get("name")||"").trim(),role:"visitor",site:fd.get("site"),password:String(fd.get("password")||"1234")});
-      saveUsers(users); showToast("Compte visiteur créé"); render();
-    });
-    document.querySelectorAll("[data-disable-user]").forEach(btn=>btn.addEventListener("click",()=>{
-      const users=loadUsers().filter(u=>u.id!==btn.dataset.disableUser); saveUsers(users); showToast("Compte désactivé"); render();
-    }));
-  }
 }
 
 function attachViewHandlers(){
@@ -1838,10 +1840,12 @@ document.getElementById("tabbar").addEventListener("click", (ev) => {
 
 /* ---------- Init ---------- */
 (async function init(){
-  loadUsers();
-  if(!ensureSession()){ renderLogin(); return; }
-  document.getElementById("main").innerHTML = `<div class="loading-row">Chargement des données…</div>`;
+  const sb=getSupabaseClient();
+  if(!sb){ renderLogin(); return; }
+  if(!await ensureSession()){ renderLogin(); return; }
+  document.getElementById("main").innerHTML = `<div class="loading-row">Connexion à la base centrale…</div>`;
   await loadEntries();
+  subscribeRealtime();
   render();
 })();
 </script>
