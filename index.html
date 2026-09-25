@@ -1158,7 +1158,7 @@ function wagonCardHTML(e){
         <div class="card-foot">${esc(e.visitor || "Agent non renseigné")} · ${fmtDateTime(e.created_at)}</div>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn secondary wagon-history-btn" type="button" data-wagon-action="history" data-wagon="${esc(e.wagon)}">Historique</button>
-          ${(!isVisitor() || e.site===currentUser.site) ? `<button class="btn wagon-edit-btn" type="button" data-wagon-action="edit" data-wagon="${esc(e.wagon)}">Modifier la situation</button>` : ""}
+          ${(!isVisitor() || e.site===currentUser.site || isReformPending(e)) ? `<button class="btn wagon-edit-btn" type="button" data-wagon-action="edit" data-wagon="${esc(e.wagon)}">Modifier la situation</button>` : ""}
         </div>
       </div>
     </div>
@@ -1496,7 +1496,7 @@ function bannerHTML(){
 /* ---------- History modal ---------- */
 function openHistory(wagon){
   let rows = entries.filter(e => e.wagon === wagon);
-  if(isVisitor()) rows = rows.filter(e => e.site === currentUser.site);
+  if(isVisitor() && !reformStateForWagon(wagon).reformed) rows = rows.filter(e => e.site === currentUser.site);
   rows.sort((a,b) => b.created_at.localeCompare(a.created_at));
   const overlay = document.getElementById("modalOverlay");
   const sheet = document.getElementById("modalSheet");
