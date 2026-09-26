@@ -1713,7 +1713,7 @@ function attachViewHandlers(){
       const val = document.getElementById("searchInput");
       val.selectionStart = val.selectionEnd = val.value.length;
     });
-    document.getElementById("siteFilter").addEventListener("click", (ev) => {
+    document.getElementById("siteFilter")?.addEventListener("click", (ev) => {
       const btn = ev.target.closest("button[data-site]");
       if(!btn) return;
       state.filterSite = btn.dataset.site;
