@@ -587,10 +587,11 @@ let storageOk = true;
 let lastSavedAt = null;
 let currentUser = null;
 let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null, dashboardSite: "Tous", dashboardStatus: "Tous", prefillWagon: null, prefillEntryId: null };
-const STORAGE_VERSION = 22;
-const LOCAL_BACKUP_KEY = "wagons-fret-history-backup-v22";
+const STORAGE_VERSION = 23;
+const LOCAL_BACKUP_KEY = "wagons-fret-history-backup-v23";
 let supabaseClient = null;
 let realtimeChannel = null;
+let userProfiles = [];
 
 function getSupabaseClient(){
   if(supabaseClient) return supabaseClient;
@@ -601,15 +602,71 @@ function getSupabaseClient(){
   });
   return supabaseClient;
 }
-function roleFromUser(user){
+function roleFromUser(user, profile=null){
   const email=(user?.email||"").toLowerCase();
   const controllers=(window.SUPABASE_CONFIG?.controllerEmails||[]).map(x=>String(x).toLowerCase().trim()).filter(Boolean);
-  return controllers.includes(email) || user?.user_metadata?.role === "controller" ? "controller" : "visitor";
+  if(controllers.includes(email) || user?.user_metadata?.role === "controller") return "controller";
+  if(profile?.role === "controller") return "controller";
+  return "visitor";
 }
-function buildCurrentUser(user){
-  const role=roleFromUser(user);
+async function loadUserProfile(user){
+  const sb=getSupabaseClient();
+  if(!sb || !user?.id) return null;
+  try{
+    const {data,error}=await sb.from("profiles").select("id,email,nom,role,site,actif").eq("id",user.id).maybeSingle();
+    if(error) throw error;
+    return data || null;
+  }catch(err){
+    console.warn("Profil utilisateur indisponible:",err?.message||err);
+    return null;
+  }
+}
+async function loadUserProfiles(){
+  const sb=getSupabaseClient();
+  if(!sb || !currentUser || !isController()) return;
+  try{
+    const {data,error}=await sb.from("profiles").select("id,email,nom,role,site,actif,created_at,updated_at").order("email");
+    if(error) throw error;
+    userProfiles=Array.isArray(data)?data:[];
+  }catch(err){
+    console.warn("Liste profils indisponible:",err?.message||err);
+    userProfiles=[];
+  }
+}
+async function saveUserProfile(profileId, patch){
+  const sb=getSupabaseClient();
+  if(!sb || !isController() || !profileId) return false;
+  try{
+    const {error}=await sb.from("profiles").update({
+      nom:String(patch.nom||"").trim(),
+      role:patch.role==="controller" ? "controller" : "visitor",
+      site:SITES.includes(patch.site) ? patch.site : "Tous",
+      actif:patch.actif !== false,
+      updated_at:new Date().toISOString()
+    }).eq("id",profileId);
+    if(error) throw error;
+    await loadUserProfiles();
+    return true;
+  }catch(err){
+    console.error(err);
+    showToast("Modification du profil impossible : "+(err?.message||"erreur"));
+    return false;
+  }
+}
+async function buildCurrentUser(user){
   const meta=user?.user_metadata||{};
-  return {id:user.id, username:user.email||user.id, name:meta.name || (user.email ? user.email.split("@")[0] : "Utilisateur"), role, site:"Tous"};
+  const profile=await loadUserProfile(user);
+  const role=roleFromUser(user,profile);
+  const allowedSites=["Beni Ansar (Gare)","Beni Ansar (Port)","Selouane","Hassi Blal"];
+  const site=role==="controller" ? "Tous" : (allowedSites.includes(String(profile?.site||"")) ? String(profile.site) : "Tous");
+  return {
+    id:user.id,
+    username:user.email||user.id,
+    name:profile?.nom || meta.name || (user.email ? user.email.split("@")[0] : "Utilisateur"),
+    role,
+    site,
+    actif:profile?.actif !== false
+  };
 }
 function isController(){ return !!currentUser && currentUser.role === "controller"; }
 function isVisitor(){ return !!currentUser && currentUser.role === "visitor"; }
@@ -620,7 +677,13 @@ async function ensureSession(){
   if(!sb) return false;
   const {data:{session},error}=await sb.auth.getSession();
   if(error || !session?.user) return false;
-  currentUser=buildCurrentUser(session.user);
+  currentUser=await buildCurrentUser(session.user);
+  if(!currentUser?.actif){
+    await sb.auth.signOut();
+    currentUser=null;
+    return false;
+  }
+  if(isController()) await loadUserProfiles();
   return true;
 }
 async function clearSession(){
@@ -654,7 +717,9 @@ function renderLogin(){
       err.textContent=error?.message || "Connexion impossible.";
       return;
     }
-    currentUser=buildCurrentUser(data.user);
+    currentUser=await buildCurrentUser(data.user);
+    if(!currentUser?.actif){ await sb.auth.signOut(); return; }
+    if(isController()) await loadUserProfiles();
     location.reload();
   });
 }
@@ -829,7 +894,7 @@ function render(){
 
 function renderHeaderChips(){
   const chipUser = document.getElementById("currentUserChip");
-  if(chipUser) chipUser.innerHTML = `<span class="role-pill">${esc(roleLabel())}</span>`;
+  if(chipUser) chipUser.innerHTML = `<span class="role-pill">${esc(roleLabel())}</span> <span class="role-pill">${esc(currentUser.site||"Tous")}</span>`;
   document.getElementById("logoutBtn")?.addEventListener("click",async()=>{ await clearSession(); location.reload(); });
   const latest = latestPerWagon(entries);
   const counts = {};
@@ -1059,7 +1124,8 @@ function viewDashboard(){
 
 function viewSaisie(){
   const prefill = state.prefillWagon ? historyForWagon(state.prefillWagon).slice(-1)[0] : null;
-  const selectedSite = prefill?.site || SITES[0];
+  const editReformed = state.prefillWagon ? reformStateForWagon(state.prefillWagon).reformed : false;
+  const selectedSite = prefill?.site || (isVisitor() && currentUser.site !== "Tous" ? currentUser.site : SITES[0]);
   const selectedSerie = prefill?.serie || (state.prefillWagon ? serieFromWagon(state.prefillWagon) : null) || SERIES[0];
   return `
     <div class="card">
@@ -1072,7 +1138,10 @@ function viewSaisie(){
         <label>Site</label>
         <select name="site" required>
           <option value="">Choisir un site</option>
-          ${SITES.map(site => `<option value="${esc(site)}" ${site===selectedSite?'selected':''}>${esc(site)}</option>`).join("")}
+          ${SITES.map(site => {
+            const allowed = isController() || site===currentUser.site || editReformed;
+            return allowed ? `<option value="${esc(site)}" ${site===selectedSite?'selected':''}>${esc(site)}</option>` : "";
+          }).join("")}
         </select>
 
         <label>Numéro de wagon</label>
@@ -1212,11 +1281,30 @@ function viewPilotage(){
 }
 function viewUsers(){
   if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
+  const profilesHtml = userProfiles.length
+    ? userProfiles.map(p=>`
+      <div class="user-item" data-profile-id="${esc(p.id)}">
+        <div class="top"><strong>${esc(p.nom||p.email||"Utilisateur")}</strong><span class="role-pill">${esc(p.role==="controller"?"Contrôleur":"Visiteur")}</span></div>
+        <small>${esc(p.email||"")} · ${p.actif===false?"Inactif":"Actif"}</small>
+        <label>Nom affiché<input data-profile-name value="${esc(p.nom||"")}"></label>
+        <label>Rôle<select data-profile-role><option value="visitor" ${p.role!=="controller"?"selected":""}>Visiteur</option><option value="controller" ${p.role==="controller"?"selected":""}>Contrôleur matériel</option></select></label>
+        <label>Site affecté<select data-profile-site><option value="Tous" ${p.site==="Tous"?"selected":""}>Tous</option>${SITES.map(s=>`<option value="${esc(s)}" ${p.site===s?"selected":""}>${esc(s)}</option>`).join("")}</select></label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input data-profile-active type="checkbox" style="width:20px" ${p.actif!==false?"checked":""}> Compte actif</label>
+        <button class="btn secondary" type="button" data-save-profile>Enregistrer le profil</button>
+      </div>`).join("")
+    : `<div class="attention-empty">Aucun profil trouvé. Crée d'abord les comptes dans Supabase Authentication puis exécute le script de préparation des profils.</div>`;
   return `<div class="card"><h2 class="section-title">Comptes utilisateurs</h2>
-    <p class="help-text">Les comptes visiteurs sont maintenant gérés dans <strong>Supabase → Authentication → Users</strong>. Pour le pilote, crée les comptes individuellement dans Supabase. Cette page ne stocke plus de mots de passe dans le téléphone.</p>
-    <div class="storage-status"><span class="dot"></span><div><strong>Authentification centralisée active</strong><div class="small">Les sessions sont gérées par Supabase Auth.</div></div></div>
+    <p class="help-text">Les comptes et mots de passe sont gérés par <strong>Supabase Authentication</strong>. Cette page permet au Contrôleur matériel d'affecter le rôle, le site et l'état actif de chaque compte.</p>
+    <div class="storage-status"><span class="dot"></span><div><strong>Authentification centralisée active</strong><div class="small">${userProfiles.length} profil(s) chargé(s)</div></div></div>
   </div>
-  <div class="card"><h2 class="section-title">Accès du pilote</h2><ul class="security-list"><li>10 comptes visiteurs prévus pour le test.</li><li>Les visiteurs consultent Beni Ansar, Selouane et Hassi Blal.</li><li>Le compte Contrôleur est identifié par l’adresse configurée dans <strong>supabase-config.js</strong>.</li><li>Aucun mot de passe n’est enregistré dans le code ou le stockage local.</li></ul></div>`;
+  <div class="card"><h2 class="section-title">Profils et affectations</h2><div class="user-list">${profilesHtml}</div></div>
+  <div class="card"><h2 class="section-title">Règles du pilote</h2><ul class="security-list">
+    <li>Les visiteurs consultent tous les sites.</li>
+    <li>Un visiteur saisit normalement sur son site affecté.</li>
+    <li>Un wagon en réforme peut être modifié par un visiteur depuis n'importe quel site pour permettre son transfert vers réparation.</li>
+    <li>Le Contrôleur matériel conserve les droits globaux.</li>
+    <li>Chaque nouvelle modification est ajoutée à l'historique sans écraser les saisies précédentes.</li>
+  </ul></div>`;
 }
 function viewExport(){
   if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
@@ -1246,7 +1334,7 @@ function viewExport(){
     <div class="card">
       <h2 class="section-title">Sauvegarde & mémoire</h2>
       <div class="storage-status ${storageOk ? "ok" : "bad"}">
-        <span class="dot"></span><div><strong>${storageOk ? "Mémoire locale opérationnelle" : "Problème de mémoire locale"}</strong><div class="small">Dernière sauvegarde automatique : ${esc(lastSaved)}</div></div>
+        <span class="dot"></span><div><strong>${storageOk ? "Base centrale opérationnelle" : "Problème de connexion à la base centrale"}</strong><div class="small">Dernière sauvegarde automatique : ${esc(lastSaved)}</div></div>
       </div>
       <div class="backup-stats"><div><b>${entries.length}</b><span>saisies conservées</span></div><div><b>${latest.length}</b><span>wagons suivis</span></div></div>
       <button class="btn" id="exportBackup">💾 Sauvegarder toute la mémoire (JSON)</button>
@@ -1263,7 +1351,7 @@ function viewExport(){
 
     <div class="card">
       <h2 class="section-title">Sécurité des données</h2>
-      <ul class="security-list"><li>Chaque enregistrement possède son propre identifiant et numéro de séquence.</li><li>Les nouvelles saisies n'écrasent pas les anciennes.</li><li>Une saisie annulée reste visible dans l'historique.</li><li>Les données restent sur cet appareil et ce navigateur : elles ne sont pas synchronisées entre téléphones.</li><li>Les mots de passe du prototype local ne doivent pas être utilisés comme système de production.</li></ul>
+      <ul class="security-list"><li>Chaque enregistrement possède son propre identifiant et numéro de séquence.</li><li>Les nouvelles saisies n'écrasent pas les anciennes.</li><li>Une saisie annulée reste visible dans l'historique.</li><li>Les données des wagons sont centralisées dans Supabase et synchronisées entre les téléphones connectés au même pilote.</li><li>Les mots de passe sont gérés uniquement par Supabase Authentication et ne sont jamais enregistrés dans cette application.</li></ul>
     </div>
     ${auditPanelHTML()}`;
 }
@@ -1495,8 +1583,8 @@ function bannerHTML(){
 
 /* ---------- History modal ---------- */
 function openHistory(wagon){
+  // Historique global : tous les utilisateurs authentifiés voient toutes les étapes du wagon.
   let rows = entries.filter(e => e.wagon === wagon);
-  if(isVisitor() && !reformStateForWagon(wagon).reformed) rows = rows.filter(e => e.site === currentUser.site);
   rows.sort((a,b) => b.created_at.localeCompare(a.created_at));
   const overlay = document.getElementById("modalOverlay");
   const sheet = document.getElementById("modalSheet");
@@ -1682,11 +1770,17 @@ function attachViewHandlers(){
           visitor: currentUser.username,
           created_at: new Date().toISOString()
         };
+        const editingWagon = state.prefillWagon || entry.wagon;
+        const canEditReformed = editingWagon ? reformStateForWagon(editingWagon).reformed : false;
+        if(isVisitor() && !canEditReformed && entry.site !== currentUser.site){
+          showToast("Vous ne pouvez saisir que sur votre site affecté.");
+          return;
+        }
         const validationErrors=validateEntryData(entry);
         if(validationErrors.length){ showToast(validationErrors[0]); return; }
         entries.push(entry);
         const ok = await saveEntries();
-        if(!ok){ entries.pop(); showToast("Enregistrement impossible : mémoire locale indisponible"); return; }
+        if(!ok){ entries.pop(); showToast("Enregistrement impossible : connexion à la base centrale indisponible"); return; }
         showToast("Saisie enregistrée");
         state.view = "situation";
         state.prefillWagon = null;
@@ -1732,6 +1826,31 @@ function attachViewHandlers(){
       state.view = "saisie";
       render();
     }));
+  }
+
+  if(state.view === "users" && isController()){
+    document.querySelectorAll("[data-save-profile]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const card=btn.closest("[data-profile-id]");
+        const id=card?.dataset.profileId;
+        if(!id) return;
+        const ok=await saveUserProfile(id,{
+          nom:card.querySelector("[data-profile-name]")?.value||"",
+          role:card.querySelector("[data-profile-role]")?.value||"visitor",
+          site:card.querySelector("[data-profile-site]")?.value||"Tous",
+          actif:!!card.querySelector("[data-profile-active]")?.checked
+        });
+        if(ok){
+          showToast("Profil utilisateur enregistré");
+          if(id===currentUser.id){
+            const sb=getSupabaseClient();
+            const {data:{session}}=await sb.auth.getSession();
+            if(session?.user) currentUser=await buildCurrentUser(session.user);
+          }
+          render();
+        }
+      });
+    });
   }
 
   if(state.view === "export" && isController()){
