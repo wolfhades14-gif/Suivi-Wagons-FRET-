@@ -1,0 +1,1976 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Suivi Wagons FRET</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Suivi Wagons FRET">
+<meta name="theme-color" content="#2C4A63">
+<meta name="description" content="Suivi des wagons FRET ONCF sur les sites de Beni Ansar, Selouane et Hassi Blal.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-512.png">
+<style>
+  :root{
+    --bg:#EEF1F3;
+    --surface:#FFFFFF;
+    --border:#D7DEE3;
+    --text:#16232E;
+    --muted:#5B6B7A;
+    --primary:#2C4A63;
+    --primary-light:#3E647F;
+    --primary-bg:#E4ECF1;
+    --amber:#B36B00;
+    --amber-bg:#FBEBD2;
+    --green:#2E6B4C;
+    --green-bg:#DEEEE4;
+    --red:#A6362B;
+    --red-bg:#F7E1DF;
+    --radius:14px;
+    --radius-sm:8px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  .app{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    max-width:520px;
+    margin:0 auto;
+    width:100%;
+    background:var(--bg);
+  }
+  header.top{
+    flex:0 0 auto;
+    background:linear-gradient(135deg,#0E4F78 0%,#1976A9 100%);
+    color:#fff;
+    padding:22px 18px 16px;
+    position:sticky; top:0; z-index:5;
+    box-shadow:0 5px 18px rgba(12,65,99,.16);
+  }
+  header.top h1{
+    font-size:27px;
+    margin:0 0 3px;
+    font-weight:800;
+    letter-spacing:-0.03em;
+  }
+  header.top p{
+    margin:0;
+    font-size:15px;
+    color:#D8EDF9;
+  }
+  .chips-row{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+    overflow-x:auto;
+    padding-bottom:2px;
+  }
+  .chip-stat{
+    flex:1 0 auto;
+    background:rgba(255,255,255,0.1);
+    border-radius:var(--radius-sm);
+    padding:7px 10px;
+    min-width:78px;
+  }
+  .chip-stat .n{ font-size:17px; font-weight:700; display:block; line-height:1.1; }
+  .chip-stat .l{ font-size:10.5px; color:#C7D5DE; display:block; margin-top:1px; }
+
+  main{
+    flex:1 1 auto;
+    overflow-y:auto;
+    padding:16px 16px 90px;
+    -webkit-overflow-scrolling:touch;
+  }
+  nav.tabbar{
+    flex:0 0 auto;
+    display:flex;
+    background:var(--surface);
+    border-top:1px solid var(--border);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    position:sticky; bottom:0; z-index:5;
+  }
+  nav.tabbar button{
+    flex:1;
+    border:none;
+    background:none;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    padding:6px 2px;
+    font-size:11px;
+    color:var(--muted);
+    font-family:inherit;
+    border-radius:var(--radius-sm);
+  }
+  nav.tabbar button.active{ color:var(--primary); background:var(--primary-bg); }
+  nav.tabbar button svg{ width:20px; height:20px; }
+
+  h2.section-title{ font-size:15.5px; font-weight:650; margin:0 0 10px; }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:14px;
+    margin-bottom:12px;
+  }
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .stat-box{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+  .stat-box .num{ font-size:26px; font-weight:700; }
+  .stat-box .lab{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .stat-box.dispo .num{ color:var(--green); }
+  .stat-box.immob .num{ color:var(--red); }
+  .stat-box.repar .num{ color:var(--amber); }
+  .stat-box.attente .num{ color:var(--primary); }
+  .stat-box.reforme .num{ color:#6B4F8A; }
+  .memory-strip{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 11px; margin-bottom:12px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .memory-strip strong{ color:var(--text); }
+  .hist-note{ font-size:11.5px; color:var(--muted); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:10px; }
+  .hist-item.cancelled{ opacity:.58; }
+  .hist-cancel{ font-size:11.5px; color:var(--red); background:none; border:1px solid var(--border); border-radius:6px; padding:5px 8px; margin-top:6px; font-family:inherit; }
+  .stat-box.reforme .num{ color:#6B4F8A; }
+
+  .site-bar-row{ margin-bottom:10px; }
+  .site-bar-row .head{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+  .site-bar-row .track{ height:8px; background:var(--border); border-radius:5px; overflow:hidden; display:flex; }
+  .site-bar-row .seg{ height:100%; }
+
+  label{ display:block; font-size:12.5px; color:var(--muted); margin:14px 0 6px; font-weight:600; }
+  label:first-child{ margin-top:0; }
+  input, select, textarea{
+    width:100%;
+    padding:11px 12px;
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    font-size:15px;
+    font-family:inherit;
+    background:#fff;
+    color:var(--text);
+  }
+  textarea{ min-height:70px; resize:vertical; }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--primary-light); outline-offset:1px; }
+  .field-error{ color:var(--red); font-size:12px; margin-top:4px; display:none; }
+  .field-error.show{ display:block; }
+
+  .btn{
+    display:block;
+    width:100%;
+    text-align:center;
+    background:var(--primary);
+    color:#fff;
+    border:none;
+    padding:13px;
+    border-radius:var(--radius-sm);
+    font-size:15px;
+    font-weight:650;
+    margin-top:18px;
+    font-family:inherit;
+  }
+  .btn:active{ background:var(--primary-light); }
+  .btn.secondary{ background:var(--surface); color:var(--primary); border:1px solid var(--primary); }
+  .btn.ghost{ background:none; color:var(--red); border:1px solid var(--red); }
+
+  .search-row{ display:flex; gap:8px; margin-bottom:10px; }
+  .search-row input{ flex:1; }
+  .site-filter{ display:flex; gap:6px; overflow-x:auto; margin-bottom:14px; padding-bottom:2px; }
+  .site-filter button{
+    flex:0 0 auto;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--text);
+    padding:7px 12px;
+    border-radius:20px;
+    font-size:12.5px;
+    font-family:inherit;
+  }
+  .site-filter button.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  .wagon-card{
+    display:flex;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    margin-bottom:10px;
+    overflow:hidden;
+  }
+  .wagon-card .bar{ width:5px; flex:0 0 auto; }
+  .wagon-card .body{ padding:11px 13px; flex:1; min-width:0; }
+  .wagon-card .row1{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .wagon-card .num{ font-size:16px; font-weight:700; letter-spacing:0.01em; }
+  .badge{ font-size:11.5px; font-weight:650; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .meta-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .meta-tag{ font-size:11.5px; color:var(--muted); background:var(--bg); padding:2px 8px; border-radius:6px; }
+  .card-obs{ font-size:13px; color:var(--text); margin-top:7px; line-height:1.35; }
+  .card-foot{ font-size:11px; color:var(--muted); margin-top:7px; }
+
+  .empty{ text-align:center; padding:40px 16px; color:var(--muted); }
+  .empty .big{ font-size:34px; margin-bottom:8px; }
+  .empty p{ font-size:13.5px; line-height:1.5; margin:4px 0 0; }
+
+  .toast{
+    position:fixed; left:50%; bottom:90px; transform:translateX(-50%);
+    background:var(--text); color:#fff; padding:10px 18px; border-radius:24px;
+    font-size:13.5px; z-index:50; opacity:0; transition:opacity .2s;
+    pointer-events:none; white-space:nowrap;
+  }
+  .toast.show{ opacity:1; }
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(10,15,20,0.5);
+    display:flex; align-items:flex-end; z-index:40;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .modal-sheet{
+    background:var(--bg); width:100%; max-height:82vh; overflow-y:auto;
+    border-radius:18px 18px 0 0; padding:16px 16px calc(20px + env(safe-area-inset-bottom));
+    max-width:520px; margin:0 auto;
+  }
+  .modal-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .modal-head h3{ margin:0; font-size:16.5px; }
+  .modal-close{ border:none; background:none; font-size:22px; color:var(--muted); line-height:1; padding:4px; }
+  .hist-item{ border-left:3px solid var(--border); padding:2px 0 12px 12px; margin-bottom:2px; position:relative; }
+  .hist-item:last-child{ border-color:transparent; }
+  .hist-item .dot{ position:absolute; left:-6px; top:4px; width:9px; height:9px; border-radius:50%; }
+  .hist-item .when{ font-size:11.5px; color:var(--muted); }
+  .hist-item .st{ font-size:13.5px; font-weight:650; margin:2px 0; }
+  .hist-item .det{ font-size:12.5px; color:var(--text); }
+  .hist-del{ font-size:11.5px; color:var(--red); background:none; border:none; padding:4px 0; font-family:inherit; }
+
+  .banner{ background:var(--red-bg); color:var(--red); border-radius:var(--radius-sm); padding:10px 12px; font-size:13px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .banner button{ border:none; background:var(--red); color:#fff; border-radius:6px; padding:5px 10px; font-size:12px; font-family:inherit; }
+  .loading-row{ text-align:center; padding:30px 0; color:var(--muted); font-size:13.5px; }
+
+  .storage-status{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:12px;padding:11px 12px;margin-bottom:12px;background:#F7FAFB;}
+  .storage-status .dot{width:10px;height:10px;border-radius:50%;background:var(--green);flex:0 0 auto;}
+  .storage-status.bad .dot{background:var(--red);}
+  .storage-status strong{font-size:13px;}
+  .small{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .backup-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px;}
+  .backup-stats>div{background:var(--primary-bg);border-radius:10px;padding:10px;text-align:center;}
+  .backup-stats b{display:block;font-size:20px;}
+  .backup-stats span{font-size:11.5px;color:var(--muted);}
+  .help-text{font-size:11.5px;color:var(--muted);line-height:1.45;margin:10px 0 0;}
+  .security-list{margin:0;padding-left:19px;color:var(--muted);font-size:12px;line-height:1.6;}
+  .security-list li{margin-bottom:5px;}
+
+  .v6-filter-card{padding-bottom:10px;}
+  .filter-title{font-weight:700;font-size:15px;margin-bottom:8px;}
+  .filter-label{font-size:11.5px;color:var(--muted);margin:7px 0 5px;}
+  .v6-filters{display:flex;gap:6px;overflow-x:auto;padding-bottom:3px;}
+  .filter-chip{flex:0 0 auto;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:7px 11px;border-radius:20px;font-size:11.5px;font-family:inherit;}
+  .filter-chip.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+  .v6-stats .stat-box{min-width:0;}
+  .kpi-grid,.aging-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .kpi-grid>div,.aging-grid>div{background:var(--bg);border-radius:10px;padding:11px;text-align:center;}
+  .kpi-grid b,.aging-grid b{display:block;font-size:22px;}
+  .kpi-grid span,.aging-grid span{display:block;font-size:11px;color:var(--muted);margin-top:2px;}
+  .metric-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .metric-row:last-child{border-bottom:0;}
+  .muted-small{font-size:10.8px;color:var(--muted);margin-top:3px;line-height:1.35;}
+  .week-row{display:grid;grid-template-columns:58px 1fr 28px 45px;gap:6px;align-items:center;margin:8px 0;font-size:10.5px;}
+  .week-label{color:var(--muted);}
+  .week-track{height:9px;background:var(--bg);border-radius:8px;overflow:hidden;}
+  .week-fill{height:100%;background:var(--primary);border-radius:8px;min-width:3px;}
+  .week-num{font-weight:700;text-align:right;}
+  .week-imm{color:var(--red);text-align:right;}
+  .legend-small{font-size:10.5px;color:var(--muted);margin-top:8px;}
+  .quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .quick-grid>div{background:var(--bg);padding:11px;border-radius:10px;display:flex;flex-direction:column;gap:5px;}
+  .quick-grid span{font-size:11px;color:var(--muted);}
+  .quick-grid b{font-size:20px;}
+  .attention-table{display:flex;flex-direction:column;gap:8px;}
+  .attention-row{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface);cursor:pointer;}
+  .attention-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .attention-wagon{font-weight:750;font-size:14px;}
+  .age-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:15px;background:var(--bg);color:var(--muted);white-space:nowrap;}
+  .age-badge.a7{color:#8a6500;background:#fff5cf;}
+  .age-badge.a15{color:#a94f00;background:#fff0e2;}
+  .age-badge.a30{color:var(--red);background:var(--red-bg);}
+  .attention-meta{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.4;}
+  .attention-empty{font-size:12px;color:var(--muted);padding:8px 0;}
+  .age-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:10px;}
+  .age-summary>div{background:var(--bg);border-radius:9px;padding:9px 5px;text-align:center;}
+  .age-summary b{display:block;font-size:19px;}
+  .age-summary span{font-size:10.5px;color:var(--muted);}
+  .v9-overview{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .v9-panel{background:var(--bg);border-radius:10px;padding:11px;}
+  .v9-panel .v9-title{font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:650;}
+  .v9-panel b{display:block;font-size:24px;}
+  .v9-panel small{display:block;font-size:10.8px;color:var(--muted);margin-top:3px;line-height:1.35;}
+  .treatment-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .treatment-grid>div{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface);}
+  .treatment-grid b{display:block;font-size:22px;}
+  .treatment-grid span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .v9-note{font-size:11.5px;color:var(--muted);line-height:1.45;margin:9px 0 0;}
+  @media (max-width:380px){.week-row{grid-template-columns:52px 1fr 24px 40px}.stat-box{padding:11px}.stat-box .num{font-size:23px;}}
+
+
+  /* V10 · comptes et rôles */
+  .auth-screen{min-height:100vh;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
+  .auth-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:0 8px 30px rgba(0,0,0,.08);}
+  .auth-card h1{margin:0 0 4px;font-size:22px}.auth-card p{margin:0 0 18px;color:var(--muted);font-size:13px}
+  .auth-badge{display:inline-block;background:var(--primary-bg);color:var(--primary);border-radius:999px;padding:5px 9px;font-size:11px;font-weight:700;margin-bottom:12px}
+  .auth-help{font-size:11px;color:var(--muted);line-height:1.45;margin-top:12px}
+  .user-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border-radius:999px;padding:5px 9px;margin-top:8px;font-size:11px}
+  .role-pill{font-size:10px;border-radius:999px;padding:3px 7px;background:var(--primary-bg);color:var(--primary);font-weight:700}
+  .simple-home{display:grid;gap:10px}.simple-action{display:block;width:100%;text-align:left;border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:14px;font-family:inherit;color:var(--text);font-size:14px}.simple-action strong{display:block}.simple-action span{display:block;color:var(--muted);font-size:11.5px;margin-top:3px}
+  .v10-section{margin-bottom:12px}.v10-user-row{display:flex;justify-content:space-between;align-items:center;gap:10px}.v10-user-meta{font-size:12px;color:var(--muted)}
+  .user-list{display:grid;gap:8px}.user-item{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface)}.user-item .top{display:flex;justify-content:space-between;gap:8px;align-items:center}.user-item small{display:block;color:var(--muted);margin-top:3px}
+  .danger-btn{border:1px solid var(--red);background:var(--red-bg);color:var(--red);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:11px}
+  .logout-btn{margin-left:auto;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:8px;padding:6px 9px;font-family:inherit;font-size:11px}
+  .chips-row{display:grid !important;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px;overflow:visible;padding:0}.chip-stat{min-width:0;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.10);border-radius:15px;padding:10px 9px 9px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}.chip-stat .n{font-size:25px;font-weight:800;line-height:1}.chip-stat .l{font-size:11.5px;color:#fff;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.header-user-row{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}.header-user-row>div:first-child{flex:1;min-width:0}.header-user-row .user-chip{margin-top:9px}.logout-btn{margin-top:0;padding:10px 14px;border-radius:12px;font-size:13px;background:rgba(255,255,255,.05)}
+  .cloud-note{font-size:11.5px;color:var(--muted);line-height:1.45;background:var(--bg);border-radius:9px;padding:10px}.cloud-link{display:block;margin-top:8px;text-align:center;text-decoration:none}
+
+
+  .report-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.report-grid label{font-size:12px;color:var(--muted)}.report-grid input,.report-grid select{margin-top:5px}.export-actions{display:grid;gap:8px;margin-top:12px}.chart-preview{overflow:auto}[data-visitor-label]{display:none} .visitor-label{display:none}
+
+
+/* V18 · Motifs multiples lisibles et cohérents */
+.v18-motif-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:8px 0 12px}
+.motif-option{display:flex;align-items:center;gap:10px;min-height:48px;padding:11px 12px;background:#F5F8FA;border:1px solid var(--border);border-radius:12px;color:var(--text);font-weight:650;cursor:pointer}
+.motif-option:has(input:checked){background:#E4F0F7;border-color:#15557D;box-shadow:0 0 0 1px #15557D inset}
+.motif-option input,.motif-none input{width:20px;height:20px;accent-color:#15557D;flex:0 0 auto}
+.motif-none{display:flex;align-items:center;gap:10px;padding:10px 2px;font-weight:650}
+.motif-help{margin-top:0}
+@media(max-width:420px){.v18-motif-grid{gap:8px}.motif-option{padding:10px;font-size:13px}}
+
+/* V11.2 · Palette opérationnelle — conserver l'identité visuelle validée */
+:root{
+  --bg:#EEF3F7;
+  --surface:#FFFFFF;
+  --border:#D9E2EA;
+  --text:#17324A;
+  --muted:#607487;
+  --primary:#15557D;
+  --primary-light:#1F6F9F;
+  --primary-bg:#E4F0F7;
+  --green:#16A765;
+  --green-bg:#DDF5E9;
+  --red:#E94B55;
+  --red-bg:#FCE3E5;
+  --amber:#FFB71B;
+  --amber-bg:#FFF1C9;
+  --purple:#6E4BC4;
+  --teal:#12A7A7;
+  --sky:#4AA7E8;
+  --navy:#244D70;
+}
+body{background:var(--bg);color:var(--text)}
+header.top{background:linear-gradient(135deg,#174D73 0%,#1B628F 100%);}
+header.top p{color:#C9DFEE}
+.user-chip{background:rgba(255,255,255,.14)}
+.role-pill{background:#E9F3F9;color:#244D70}
+nav.tabbar{background:#fff;border-top:1px solid #D7E1E9;box-shadow:0 -5px 18px rgba(23,50,74,.06)}
+nav.tabbar button.active{color:#15557D;background:#E3EFF7}
+.card,.wagon-card,.stat-box,.treatment-grid>div,.attention-row{box-shadow:0 2px 10px rgba(23,50,74,.045)}
+.btn{background:#15557D}
+.btn:active{background:#1F6F9F}
+
+/* KPI — couleurs pleines comme sur la maquette validée */
+.stat-grid .stat-box{border:none;color:#fff;min-height:74px;display:flex;flex-direction:column;justify-content:center}
+.stat-grid .stat-box .num,.stat-grid .stat-box .lab{color:#fff}
+.stat-grid .stat-box.dispo{background:#16A765}
+.stat-grid .stat-box.immob{background:#E94B55}
+.stat-grid .stat-box.repar{background:#FFB71B}
+.stat-grid .stat-box.attente{background:#2F8DDF}
+.stat-grid .stat-box.reforme{background:#6E4BC4}
+.stat-grid .stat-box:not(.dispo):not(.immob):not(.repar):not(.attente):not(.reforme){background:#12A7A7}
+.stat-grid .stat-box .lab{font-weight:650}
+
+/* Panneaux opérationnels */
+.v9-overview .v9-panel:first-child{background:#DDF5E9}
+.v9-overview .v9-panel:first-child .v9-title{color:#168353}
+.v9-overview .v9-panel:first-child b{color:#16A765}
+.v9-overview .v9-panel:nth-child(2){background:#EEE7FF}
+.v9-overview .v9-panel:nth-child(2) .v9-title{color:#6545B5}
+.v9-overview .v9-panel:nth-child(2) b{color:#6E4BC4}
+.kpi-grid>div:nth-child(1){background:#E5F0F8}
+.kpi-grid>div:nth-child(2){background:#FCE3E5}
+.kpi-grid>div:nth-child(3){background:#FFF1C9}
+.kpi-grid>div:nth-child(4){background:#E0F4F4}
+.quick-grid>div{background:#EAF2F7}
+.age-summary>div{background:#F2F6F9}
+.week-fill{background:#2F8DDF}
+.filter-chip.active,.site-filter button.active{background:#15557D;border-color:#15557D}
+.storage-status .dot{background:#16A765}
+
+/* Titres et éléments d'accent */
+.section-title{color:#17324A}
+.treatment-grid>div:nth-child(1) b{color:#E94B55}
+.treatment-grid>div:nth-child(2) b{color:#FF9F00}
+.treatment-grid>div:nth-child(3) b{color:#2F8DDF}
+.treatment-grid>div:nth-child(4) b{color:#16A765}
+.age-badge.a7{color:#148457;background:#DDF5E9}
+.age-badge.a15{color:#B36A00;background:#FFF1C9}
+.age-badge.a30{color:#D73540;background:#FCE3E5}
+
+
+/* V11.8 · Dashboard simplifié : état du parc sans doublons */
+.dashboard-overview-card{padding:14px 14px 16px}
+.dashboard-main-kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.main-kpi{border-radius:18px;padding:16px 16px 14px;min-height:122px;display:flex;flex-direction:column;justify-content:center;color:#fff;box-shadow:0 5px 14px rgba(23,50,74,.09);position:relative;overflow:hidden}.main-kpi:after{content:'🚃';position:absolute;right:12px;bottom:7px;font-size:34px;opacity:.18;filter:grayscale(1)}
+.main-kpi .num{font-size:34px;font-weight:800;line-height:1;margin-bottom:7px}
+.main-kpi .kpi-icon{position:absolute;left:16px;top:16px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.96);display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:900;z-index:1}.main-kpi.dispo .kpi-icon{color:#16A765}.main-kpi.non-dispo .kpi-icon{color:#E94B55}.main-kpi.repar .kpi-icon{color:#FFB71B}.main-kpi.attente .kpi-icon{color:#2F8DDF}.main-kpi.reforme .kpi-icon{color:#6E4BC4}.main-kpi.parc .kpi-icon{color:#12A7A7}.main-kpi .num,.main-kpi .lab,.main-kpi .sub{margin-left:52px}
+.main-kpi .lab{font-size:17px;font-weight:800}
+.main-kpi .sub{font-size:11.5px;margin-top:5px;opacity:.92;line-height:1.3}
+.main-kpi.dispo{background:#16A765}.main-kpi.non-dispo{background:#E94B55}.main-kpi.repar{background:#FFB71B}.main-kpi.attente{background:#2F8DDF}.main-kpi.reforme{background:#6E4BC4}.main-kpi.parc{background:#12A7A7}
+@media(min-width:650px){.dashboard-main-kpis{grid-template-columns:repeat(2,1fr)}.main-kpi{min-height:128px}}
+
+/* V11.9 · Interface claire alignée sur la maquette mobile */
+header.top{padding:18px 16px 12px;min-height:0;overflow:hidden;background:linear-gradient(135deg,#07527F 0%,#1386BE 100%);position:sticky;top:0;z-index:5}
+header.top .header-backdrop{position:absolute;inset:0;background-image:linear-gradient(90deg,rgba(7,82,127,.98) 0%,rgba(7,82,127,.84) 43%,rgba(7,82,127,.34) 72%,rgba(7,82,127,.18) 100%),url('header-train-bg.jpg');background-size:cover,auto 100%;background-position:center,right center;background-repeat:no-repeat;opacity:.98;pointer-events:none}
+header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
+.header-user-row{align-items:flex-start;gap:10px;flex-wrap:nowrap}
+.brand-block{flex:1;min-width:0}.brand-line{display:flex;align-items:center;gap:10px}.brand-train{width:56px;height:64px;flex:0 0 56px;color:#fff;display:flex;align-items:center;justify-content:center}.brand-train svg{width:54px;height:54px}.brand-line h1{font-size:28px;line-height:1.05;margin:0 0 4px;font-weight:850;letter-spacing:-.035em}.brand-line p{margin:0;font-size:14.5px;color:#D8EDF9;white-space:nowrap}.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}.oncf-mark{display:flex;flex-direction:column;align-items:flex-end;color:#fff;line-height:1}.oncf-mark strong{font-size:22px;letter-spacing:.08em;font-style:italic}.oncf-mark span{font-size:8px;opacity:.9;margin-top:4px;white-space:nowrap}.header-user-row .user-chip{margin-top:8px;margin-left:66px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.12);padding:6px 10px;font-size:11px}.role-pill{background:#EAF5FB;color:#244D70;padding:4px 8px}.logout-btn{margin:0;padding:9px 13px;border-radius:12px;font-size:12px;background:rgba(8,65,101,.18);border:1px solid rgba(255,255,255,.42);white-space:nowrap}
+.chips-row{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:15px;overflow:visible;padding:0}
+.chip-stat{min-width:0;border:none;border-radius:14px;padding:10px 10px 9px;color:#fff;box-shadow:0 3px 9px rgba(0,0,0,.08);display:flex;flex-direction:column;justify-content:center;min-height:68px}.chip-stat:nth-child(1){background:#12AD68}.chip-stat:nth-child(2){background:#E94752}.chip-stat:nth-child(3){background:#FFB51B}.chip-stat:nth-child(4){background:#2D8DDD}.chip-stat .n{font-size:24px;font-weight:850;line-height:1}.chip-stat .l{font-size:11px;color:#fff;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dashboard-overview-card{background:transparent;border:none;box-shadow:none;padding:0;margin-bottom:12px}.dashboard-main-kpis{gap:12px}
+.nonavailable-panel{background:#fff;border:1px solid #D9E2EA;border-radius:18px;padding:14px;box-shadow:0 3px 12px rgba(23,50,74,.05)}
+.nonavailable-panel .section-title{display:flex;align-items:center;gap:8px}
+.nonavailable-note{background:#E7F3FB;border-radius:12px;padding:9px 11px;color:#15557D;font-size:11.5px;line-height:1.4;margin-top:10px}
+.treatment-grid{grid-template-columns:repeat(3,1fr)}
+.treatment-grid>div{border:none;text-align:center;background:#F5F8FA}
+@media(max-width:430px){.header-user-row{align-items:flex-start}.header-user-row h1{font-size:25px}.chips-row{gap:7px}.chip-stat{padding:9px 7px}.chip-stat .n{font-size:23px}.chip-stat .l{font-size:10.5px}.main-kpi{min-height:122px;padding:14px}.main-kpi .num{font-size:32px}.main-kpi .lab{font-size:16px}.main-kpi .sub{font-size:11px}.treatment-grid{grid-template-columns:1fr 1fr 1fr}}
+
+@media(max-width:430px){header.top{padding:14px 12px 10px}.brand-train{width:44px;height:54px;flex-basis:44px}.brand-train svg{width:44px;height:44px}.brand-line{gap:7px}.brand-line h1{font-size:24px}.brand-line p{font-size:12.5px}.header-right{gap:6px}.oncf-mark{display:none}.logout-btn{padding:8px 10px;font-size:11px}.header-role{margin-left:51px;margin-top:6px}.chips-row{gap:6px;margin-top:11px}.chip-stat{min-height:60px;padding:8px 7px}.chip-stat .n{font-size:21px}.chip-stat .l{font-size:10px}.main-kpi .kpi-icon{left:12px;top:12px;width:36px;height:36px;font-size:22px}.main-kpi .num,.main-kpi .lab,.main-kpi .sub{margin-left:46px}}
+
+<style>
+/* V12.2 — alignement fin avec la maquette mobile */
+.chips-row{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:15px;overflow:visible;padding:0}
+.chip-stat{position:relative;min-width:0;border:0;border-radius:16px;padding:12px 10px 10px;background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.16);color:#fff;min-height:70px}
+.chip-stat .n{display:block;font-size:30px;font-weight:850;line-height:1;margin-bottom:7px;color:#fff}
+.chip-stat .l{display:block;font-size:12px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip-icon{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900}
+.chip-stat.dispo .chip-icon{color:#16A765}.chip-stat.immobilise .chip-icon{color:#E94B55}.chip-stat.repar .chip-icon{color:#FFB71B}.chip-stat.attente .chip-icon{color:#2F8DDF}
+.header-user-row{align-items:flex-start}
+.brand-block{min-width:0}
+.brand-line h1{white-space:nowrap}
+.header-role{margin-left:66px}
+@media(max-width:430px){
+  header.top{padding:13px 10px 12px}
+  .header-user-row{gap:7px}
+  .brand-train{width:43px;height:52px;flex-basis:43px}
+  .brand-train svg{width:43px;height:43px}
+  .brand-line{gap:6px}
+  .brand-line h1{font-size:23px;letter-spacing:-.04em}
+  .brand-line p{font-size:12px}
+  .header-right{gap:5px}
+  .oncf-mark{display:none}
+  .logout-btn{padding:8px 9px;font-size:10.5px}
+  .header-role{margin-left:49px;margin-top:6px}
+  .role-pill{padding:4px 9px}
+  .chips-row{gap:7px;margin-top:12px}
+  .chip-stat{min-height:65px;padding:10px 7px 8px;border-radius:15px}
+  .chip-stat .n{font-size:25px;margin-bottom:6px}
+  .chip-stat .l{font-size:10px}
+  .chip-icon{width:25px;height:25px;right:7px;top:7px;font-size:15px}
+}
+</style>
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="header-backdrop" aria-hidden="true"></div>
+    <div class="header-user-row">
+      <div class="brand-block">
+        <div class="brand-line">
+          <div class="brand-train" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M18 8h28c7 0 11 4 11 11v23c0 5-4 9-9 9h-2l6 7h-7l-5-7H24l-5 7h-7l6-7h-2c-5 0-9-4-9-9V19C7 12 11 8 18 8Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M15 25h34M17 17h30M18 43h7m14 0h7" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="20" cy="48" r="3" fill="currentColor"/><circle cx="44" cy="48" r="3" fill="currentColor"/></svg></div>
+          <div>
+            <h1>Suivi Wagons FRET</h1>
+            <p>Beni Ansar, Selouane et Hassi Blal</p>
+          </div>
+        </div>
+        <div id="currentUserChip" class="header-role"></div>
+      </div>
+      <div class="header-right">
+        <div class="oncf-mark"><strong>ONCF</strong><span>Ensemble pour un parc performant</span></div>
+        <button class="logout-btn" id="logoutBtn">↪ &nbsp;Déconnexion</button>
+      </div>
+    </div>
+    <div class="chips-row" id="headerChips"></div>
+  </header>
+
+  <main id="main"></main>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-view="dashboard" data-controller-dashboard>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      <span data-controller-label>Tableau</span><span data-visitor-label>Accueil</span>
+    </button>
+    <button data-view="saisie">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      Saisie
+    </button>
+    <button data-view="situation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      Situation
+    </button>
+    <button data-view="pilotage" data-controller-only>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16"/><path d="M8 16v-5M12 16V7M16 16v-9"/></svg>
+      Pilotage
+    </button>
+    <button data-view="users" data-controller-only>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.5a3 3 0 0 1 0 5.8M17 14c2.2.8 4 3 4 6"/></svg>
+      Utilisateurs
+    </button>
+    <button data-view="export" data-controller-only>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+      Export
+    </button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal-sheet" id="modalSheet"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./supabase-config.js"></script>
+<script>
+/* ---------- Reference data ---------- */
+const SITES = ["Beni Ansar (Gare)","Beni Ansar (Port)","Selouane","Hassi Blal"];
+const SERIES = ["Tads","Fads","Uads","Fads SCIF","Fads Barytine","Autre"];
+// Auto-fill mapping from the first 4 digits of a wagon number to its série,
+// per the ONCF Parc du Matériel (Annexe 1, Contrat PFL-PMM N° 12/2021).
+const SERIE_BY_PREFIX = {
+  "5838": "Tads", "5839": "Tads",             // Tads charbon/barytine
+  "6970": "Fads", "6971": "Fads",             // Fads charbon
+  "6960": "Fads Barytine",                    // Fadsf barytine
+  "9310": "Fads SCIF",                        // Fads charbon SCIF (93105)
+  "9313": "Uads", "9314": "Uads", "9315": "Uads",   // Uads charbon/calcaire
+  "9325": "Uads", "9326": "Uads", "9328": "Uads", "9329": "Uads" // Uads charbon
+};
+function serieFromWagon(wagon){
+  if(!wagon || wagon.length < 4) return null;
+  return SERIE_BY_PREFIX[wagon.slice(0, 4)] || null;
+}
+const STATUSES = ["Disponible","Immobilisé","En réparation","En attente","Réformé"];
+const STATUS_COLOR = {
+  "Disponible":   { c: "var(--green)",  bg:"var(--green-bg)" },
+  "Immobilisé":   { c: "var(--red)",    bg:"var(--red-bg)" },
+  "En réparation":{ c: "var(--amber)",  bg:"var(--amber-bg)" },
+  "En attente":   { c: "var(--primary)",bg:"var(--primary-bg)" },
+  "Réformé":      { c: "#6B4F8A",      bg:"#EEE7F5" }
+};
+const MOTIFS = ["Aucune","VG","RA","RLCB","RLB","ILD","PDR","Frein","Caisse","Trappe","Autre"];
+function motifValues(entryOrValue){
+  const raw=typeof entryOrValue === "string" ? entryOrValue : (entryOrValue?.motif || "Aucune");
+  const values=String(raw).split(/\s*\+\s*/).map(x=>x.trim()).filter(Boolean);
+  return values.length ? values : ["Aucune"];
+}
+function motifLabel(values){
+  const clean=[...new Set((values||[]).filter(Boolean))];
+  return clean.length ? clean.join(" + ") : "Aucune";
+}
+const ISOLATION_CODES = ["Aucun","1301","1302","1303"];
+
+/* ---------- State / Supabase cloud ---------- */
+let entries = [];
+let storageOk = true;
+let lastSavedAt = null;
+let currentUser = null;
+let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null, dashboardSite: "Tous", dashboardStatus: "Tous", prefillWagon: null, prefillEntryId: null };
+const STORAGE_VERSION = 23;
+const LOCAL_BACKUP_KEY = "wagons-fret-history-backup-v23";
+let supabaseClient = null;
+let realtimeChannel = null;
+let userProfiles = [];
+
+function getSupabaseClient(){
+  if(supabaseClient) return supabaseClient;
+  if(!window.supabase || !window.SUPABASE_CONFIG){ return null; }
+  if(!window.SUPABASE_CONFIG.url || !window.SUPABASE_CONFIG.publishableKey || window.SUPABASE_CONFIG.publishableKey.includes("REMPLACER_PAR")) return null;
+  supabaseClient = window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.publishableKey, {
+    auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}
+  });
+  return supabaseClient;
+}
+function roleFromUser(user, profile=null){
+  const email=(user?.email||"").toLowerCase();
+  const controllers=(window.SUPABASE_CONFIG?.controllerEmails||[]).map(x=>String(x).toLowerCase().trim()).filter(Boolean);
+  if(controllers.includes(email) || user?.user_metadata?.role === "controller") return "controller";
+  if(profile?.role === "controller") return "controller";
+  return "visitor";
+}
+async function loadUserProfile(user){
+  const sb=getSupabaseClient();
+  if(!sb || !user?.id) return null;
+  try{
+    const {data,error}=await sb.from("profiles").select("id,email,nom,role,site,actif").eq("id",user.id).maybeSingle();
+    if(error) throw error;
+    return data || null;
+  }catch(err){
+    console.warn("Profil utilisateur indisponible:",err?.message||err);
+    return null;
+  }
+}
+async function loadUserProfiles(){
+  const sb=getSupabaseClient();
+  if(!sb || !currentUser || !isController()) return;
+  try{
+    const {data,error}=await sb.from("profiles").select("id,email,nom,role,site,actif,created_at,updated_at").order("email");
+    if(error) throw error;
+    userProfiles=Array.isArray(data)?data:[];
+  }catch(err){
+    console.warn("Liste profils indisponible:",err?.message||err);
+    userProfiles=[];
+  }
+}
+async function saveUserProfile(profileId, patch){
+  const sb=getSupabaseClient();
+  if(!sb || !isController() || !profileId) return false;
+  try{
+    const {error}=await sb.from("profiles").update({
+      nom:String(patch.nom||"").trim(),
+      role:patch.role==="controller" ? "controller" : "visitor",
+      site:SITES.includes(patch.site) ? patch.site : "Tous",
+      actif:patch.actif !== false,
+      updated_at:new Date().toISOString()
+    }).eq("id",profileId);
+    if(error) throw error;
+    await loadUserProfiles();
+    return true;
+  }catch(err){
+    console.error(err);
+    showToast("Modification du profil impossible : "+(err?.message||"erreur"));
+    return false;
+  }
+}
+async function buildCurrentUser(user){
+  const meta=user?.user_metadata||{};
+  const profile=await loadUserProfile(user);
+  const role=roleFromUser(user,profile);
+  const allowedSites=["Beni Ansar (Gare)","Beni Ansar (Port)","Selouane","Hassi Blal"];
+  const site=role==="controller" ? "Tous" : (allowedSites.includes(String(profile?.site||"")) ? String(profile.site) : "Tous");
+  return {
+    id:user.id,
+    username:user.email||user.id,
+    name:profile?.nom || meta.name || (user.email ? user.email.split("@")[0] : "Utilisateur"),
+    role,
+    site,
+    actif:profile?.actif !== false
+  };
+}
+function isController(){ return !!currentUser && currentUser.role === "controller"; }
+function isVisitor(){ return !!currentUser && currentUser.role === "visitor"; }
+function roleLabel(){ return isController() ? "Contrôleur matériel" : "Visiteur"; }
+function canAccessView(view){ return isController() || ["dashboard","saisie","situation"].includes(view); }
+async function ensureSession(){
+  const sb=getSupabaseClient();
+  if(!sb) return false;
+  const {data:{session},error}=await sb.auth.getSession();
+  if(error || !session?.user) return false;
+  currentUser=await buildCurrentUser(session.user);
+  if(!currentUser?.actif){
+    await sb.auth.signOut();
+    currentUser=null;
+    return false;
+  }
+  if(isController()) await loadUserProfiles();
+  return true;
+}
+async function clearSession(){
+  const sb=getSupabaseClient();
+  try{ if(sb) await sb.auth.signOut(); }catch(_){ }
+  currentUser=null;
+  if(realtimeChannel && sb){ try{ await sb.removeChannel(realtimeChannel); }catch(_){ } realtimeChannel=null; }
+}
+function renderLogin(){
+  const configured=!!getSupabaseClient();
+  document.body.innerHTML=`<div class="auth-screen"><div class="auth-card">
+    <h1>Suivi Wagons FRET</h1>
+    <p>Connexion sécurisée au pilote TMN.</p>
+    ${configured?`<form id="loginForm">
+      <label>Adresse e-mail</label><input name="username" type="email" autocomplete="username" placeholder="visiteur01@..." required>
+      <label>Mot de passe</label><input name="password" type="password" autocomplete="current-password" placeholder="Mot de passe" required>
+      <button class="btn" type="submit">Se connecter</button>
+    </form>
+    <div class="auth-help">Les comptes sont gérés dans Supabase Authentication. Les données des wagons sont centralisées et ne dépendent plus du stockage local du téléphone.</div>`:
+    `<div class="banner"><span>Configuration Supabase incomplète.</span></div><div class="auth-help">Renseigne la Publishable key dans <strong>supabase-config.js</strong>, puis recharge l'application.</div>`}
+  </div></div>`;
+  document.getElementById("loginForm")?.addEventListener("submit",async ev=>{
+    ev.preventDefault();
+    const fd=new FormData(ev.currentTarget), email=String(fd.get("username")||"").trim(), password=String(fd.get("password")||"");
+    const sb=getSupabaseClient();
+    if(!sb) return;
+    const {data,error}=await sb.auth.signInWithPassword({email,password});
+    if(error || !data?.user){
+      let err=document.getElementById("loginError");
+      if(!err){err=document.createElement("div");err.id="loginError";err.style="color:var(--red);font-size:12px;margin-top:10px";document.getElementById("loginForm").appendChild(err);}
+      err.textContent=error?.message || "Connexion impossible.";
+      return;
+    }
+    currentUser=await buildCurrentUser(data.user);
+    if(!currentUser?.actif){ await sb.auth.signOut(); return; }
+    if(isController()) await loadUserProfiles();
+    location.reload();
+  });
+}
+
+/* ---------- Cloud storage helpers ---------- */
+function normalizeEntries(list){
+  return (Array.isArray(list) ? list : []).map((e,i)=>({
+    ...e,
+    id:e.id || ("legacy-"+i+"-"+Date.now().toString(36)),
+    seq:Number.isFinite(Number(e.seq)) ? Number(e.seq) : i+1,
+    cancelled_at:e.cancelled_at || null,
+    cancelled_reason:e.cancelled_reason || ""
+  }));
+}
+function rowToEntry(r,i){
+  return {
+    id:r.entry_uid || String(r.id),
+    seq:Number(r.seq)||Number(r.id)||i+1,
+    record_version:Number(r.record_version)||1,
+    week:r.week || "",
+    site:r.site || "",
+    wagon:r.numero_wagon || "",
+    serie:r.serie || SERIES[0],
+    status:r.situation || "Immobilisé",
+    motif:r.motif || "Aucune",
+    isolation:r.etiquette_mod || "Aucun",
+    observation:r.observation || "",
+    visitor:r.utilisateur || "",
+    created_at:r.created_at || r.date_maj || new Date().toISOString(),
+    cancelled_at:r.cancelled_at || null,
+    cancelled_reason:r.cancelled_reason || ""
+  };
+}
+function entryToRow(e){
+  return {
+    entry_uid:e.id,
+    seq:Number(e.seq)||0,
+    record_version:Number(e.record_version)||1,
+    week:e.week||"",
+    numero_wagon:e.wagon,
+    site:e.site,
+    serie:e.serie||SERIES[0],
+    situation:e.status,
+    motif:e.motif||"Aucune",
+    etiquette_mod:e.status === "Disponible" ? "Aucun" : (e.isolation||"Aucun"),
+    observation:e.observation||"",
+    utilisateur:e.visitor || currentUser?.username || "",
+    created_at:e.created_at || new Date().toISOString(),
+    date_maj:new Date().toISOString(),
+    cancelled_at:e.cancelled_at||null,
+    cancelled_reason:e.cancelled_reason||null
+  };
+}
+async function loadEntries(){
+  const sb=getSupabaseClient();
+  if(!sb){storageOk=false;entries=[];return false;}
+  try{
+    const {data,error}=await sb.from("wagons").select("*").order("seq",{ascending:true}).order("created_at",{ascending:true});
+    if(error) throw error;
+    entries=(data||[]).map(rowToEntry);
+    lastSavedAt=entries.length ? entries.map(e=>e.created_at).sort().slice(-1)[0] : null;
+    storageOk=true;
+    return true;
+  }catch(e){
+    console.error(e); storageOk=false; entries=[]; return false;
+  }
+}
+async function saveEntries(){
+  const sb=getSupabaseClient();
+  if(!sb || !currentUser){storageOk=false;return false;}
+  try{
+    const rows=entries.map(entryToRow);
+    if(rows.length){
+      const {error}=await sb.from("wagons").upsert(rows,{onConflict:"entry_uid"});
+      if(error) throw error;
+    }
+    lastSavedAt=new Date().toISOString();
+    storageOk=true;
+    try{localStorage.setItem(LOCAL_BACKUP_KEY,JSON.stringify({app:"Suivi Wagons FRET",version:STORAGE_VERSION,exported_at:lastSavedAt,entries}));}catch(_){ }
+    return true;
+  }catch(e){console.error(e);storageOk=false;return false;}
+}
+function activeEntries(){ return entries.filter(e=>!e.cancelled_at); }
+function subscribeRealtime(){
+  const sb=getSupabaseClient(); if(!sb || realtimeChannel) return;
+  realtimeChannel=sb.channel("wagons-realtime")
+    .on("postgres_changes",{event:"*",schema:"public",table:"wagons"},async()=>{
+      const view=state.view; await loadEntries(); if(currentUser){render(); if(view==="saisie") state.view="saisie";}
+    }).subscribe();
+}
+
+/* ---------- Utilities ---------- */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function isoWeekDefault(){
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  const weekNum = 1 + Math.round(((d - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+}
+function fmtDateTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR", { day:"2-digit", month:"2-digit", year:"numeric" }) + " " +
+         d.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
+}
+function esc(s){
+  return String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ---------- Derived data ---------- */
+function latestPerWagon(list){
+  const map = new Map();
+  for(const e of list){
+    if(e.cancelled_at) continue;
+    map.set(e.wagon, e); // last active occurrence wins; older records remain in history
+  }
+  return Array.from(map.values());
+}
+// V8: a wagon marked Réformé remains counted as reformé until a later
+// Disponible entry is recorded. Changing to Immobilisé / En réparation /
+// En attente does not cancel the reform status.
+function reformStateForWagon(wagon){
+  const rows = historyForWagon(wagon);
+  let reformed = false;
+  let since = null;
+  for(const e of rows){
+    if(e.status === "Réformé"){ reformed = true; since = e; }
+    else if(e.status === "Disponible"){ reformed = false; since = null; }
+  }
+  return { reformed, since };
+}
+function isReformPending(entry){
+  return reformStateForWagon(entry.wagon).reformed;
+}
+function reformPendingRows(list = latestPerWagon(entries)){
+  return list.filter(e => isReformPending(e));
+}
+function filteredSituation(){
+  let latest = latestPerWagon(entries);
+  const query = state.search.trim();
+  // V22: all authenticated visitors can consult all three perimeters.
+  if(state.filterSite !== "Tous") latest = latest.filter(e => e.site === state.filterSite);
+  if(query) latest = latest.filter(e => e.wagon.includes(query));
+  latest.sort((a,b) => a.site.localeCompare(b.site) || a.wagon.localeCompare(b.wagon));
+  return latest;
+}
+
+/* ---------- Rendering ---------- */
+function render(){
+  if(!currentUser){ renderLogin(); return; }
+  if(!canAccessView(state.view)) state.view="dashboard";
+  renderHeaderChips();
+  renderTabbar();
+  const main = document.getElementById("main");
+  if(state.view === "dashboard") main.innerHTML = viewDashboard();
+  else if(state.view === "saisie") main.innerHTML = viewSaisie();
+  else if(state.view === "situation") main.innerHTML = viewSituation();
+  else if(state.view === "pilotage") main.innerHTML = viewPilotage();
+  else if(state.view === "users") main.innerHTML = viewUsers();
+  else if(state.view === "export") main.innerHTML = viewExport();
+  attachViewHandlers();
+}
+
+function renderHeaderChips(){
+  const chipUser = document.getElementById("currentUserChip");
+  if(chipUser) chipUser.innerHTML = `<span class="role-pill">${esc(roleLabel())}</span> <span class="role-pill">${esc(currentUser.site||"Tous")}</span>`;
+  document.getElementById("logoutBtn")?.addEventListener("click",async()=>{ await clearSession(); location.reload(); });
+  const latest = latestPerWagon(entries);
+  const counts = {};
+  STATUSES.forEach(s => counts[s] = 0);
+  latest.forEach(e => { if(counts[e.status] !== undefined) counts[e.status]++; });
+  // V11.9: la réforme reste persistante jusqu'à un statut Disponible.
+  // Les wagons réformés restent inclus dans le nombre d'immobilisés pour le pilotage.
+  const reformesPersistantes = reformPendingRows(latest).length;
+  const immobilizedTotal = counts["Immobilisé"] + reformesPersistantes;
+  const el = document.getElementById("headerChips");
+  const chips = [
+    ["Disponible", counts["Disponible"], "✓", "dispo"],
+    ["Immobilisés", immobilizedTotal, "⊘", "immobilise"],
+    ["En réparation", counts["En réparation"], "⚒", "repar"],
+    ["En attente", counts["En attente"], "◷", "attente"]
+  ];
+  el.innerHTML = chips.map(([label,n,icon,kind]) => `
+    <div class="chip-stat ${kind}">
+      <span class="chip-icon">${icon}</span>
+      <span class="n">${n}</span>
+      <span class="l">${label}</span>
+    </div>`).join("");
+}
+
+function renderTabbar(){
+  document.querySelectorAll("#tabbar button").forEach(b => {
+    const controllerOnly = b.hasAttribute("data-controller-only");
+    const controllerDashboard = b.hasAttribute("data-controller-dashboard");
+    b.style.display = ((controllerOnly || controllerDashboard) && !isController()) ? "none" : "flex";
+    b.classList.toggle("active", b.dataset.view === state.view);
+  });
+}
+
+function isoWeekFromDate(date){
+  const d = new Date(date);
+  if(Number.isNaN(d.getTime())) return "";
+  const utc = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = (utc.getUTCDay() + 6) % 7;
+  utc.setUTCDate(utc.getUTCDate() - day + 3);
+  const firstThursday = new Date(Date.UTC(utc.getUTCFullYear(),0,4));
+  const week = 1 + Math.round(((utc - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay()+6)%7)) / 7);
+  return `${utc.getUTCFullYear()}-W${String(week).padStart(2,"0")}`;
+}
+function daysSince(iso){
+  const t = new Date(iso).getTime();
+  if(!Number.isFinite(t)) return null;
+  return Math.max(0, Math.floor((Date.now()-t)/86400000));
+}
+function problemStatus(status){
+  return ["Immobilisé","En réparation","En attente"].includes(status);
+}
+function historyForWagon(wagon){
+  return entries.filter(e => e.wagon === wagon && !e.cancelled_at)
+    .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+}
+function currentEpisodeStart(entry){
+  if(!problemStatus(entry.status)) return null;
+  const rows = historyForWagon(entry.wagon);
+  let idx = rows.findIndex(e => e.id === entry.id);
+  if(idx < 0) idx = rows.length - 1;
+  while(idx > 0 && problemStatus(rows[idx-1].status)) idx--;
+  return rows[idx] || entry;
+}
+function episodeAgeDays(entry){
+  const start = currentEpisodeStart(entry);
+  return start ? (daysSince(start.created_at) ?? 0) : null;
+}
+function ageClass(days){
+  if(days >= 30) return "a30";
+  if(days >= 15) return "a15";
+  if(days >= 7) return "a7";
+  return "";
+}
+function ageLabel(days){
+  if(days >= 30) return "≥ 30 j";
+  if(days >= 15) return "≥ 15 j";
+  if(days >= 7) return "≥ 7 j";
+  return `${days} j`;
+}
+function statusTransitionEntries(status, week){
+  const rows = [...activeEntries()].sort((a,b) => new Date(a.created_at)-new Date(b.created_at));
+  return rows.filter(e => {
+    if(e.status !== status || (week && e.week !== week)) return false;
+    const hist = historyForWagon(e.wagon);
+    const idx = hist.findIndex(x => x.id === e.id);
+    const prev = idx > 0 ? hist[idx-1] : null;
+    return !prev || prev.status !== status;
+  });
+}
+function dashboardLatest(){
+  let rows = latestPerWagon(entries);
+  if(state.dashboardSite !== "Tous") rows = rows.filter(e => e.site === state.dashboardSite);
+  if(state.dashboardStatus !== "Tous") {
+    if(state.dashboardStatus === "Réformé") rows = rows.filter(e => isReformPending(e));
+    else rows = rows.filter(e => e.status === state.dashboardStatus);
+  }
+  return rows;
+}
+function viewVisitorHome(){
+  const mine=latestPerWagon(entries).filter(e=>e.visitor===currentUser.username);
+  const counts={}; STATUSES.forEach(x=>counts[x]=0); mine.forEach(e=>{if(counts[e.status]!==undefined) counts[e.status]++;});
+  const mineNonAvailable = mine.length - counts["Disponible"];
+  const recent=entries.filter(e=>!e.cancelled_at && e.visitor===currentUser.username).slice(-5).reverse();
+  return `<div class="card"><h2 class="section-title">Bonjour, ${esc(currentUser.name)}</h2><div class="v10-user-meta">Site affecté : ${esc(currentUser.site)}</div></div>
+  <div class="simple-home">
+    <button class="simple-action" data-go="saisie"><strong>＋ Nouvelle saisie</strong><span>Enregistrer rapidement la situation d'un wagon</span></button>
+    <button class="simple-action" data-go="situation"><strong>🔎 Rechercher un wagon</strong><span>Consulter la situation et l'historique</span></button>
+  </div>
+  <div class="card" style="margin-top:12px"><h2 class="section-title">Mes saisies</h2>
+    <div class="stat-grid"><div class="stat-box"><div class="num">${mine.length}</div><div class="lab">Wagons suivis</div></div><div class="stat-box"><div class="num">${mineNonAvailable}</div><div class="lab">Non disponibles</div></div></div>
+    ${recent.length?recent.map(e=>`<div class="v10-user-row" style="padding:7px 0;border-top:1px solid var(--border)"><span><strong>${esc(e.wagon)}</strong><br><span class="v10-user-meta">${esc(e.site)} · ${esc(e.status)}</span></span><span class="role-pill">${esc(e.motif||"Aucune")}</span></div>`).join(""):"<div class=\"attention-empty\">Aucune saisie pour le moment.</div>"}
+  </div>`;
+}
+
+function viewDashboard(){
+  if(isVisitor()) return viewVisitorHome();
+  if(!storageOk){
+    return bannerHTML() + `<div class="empty"><div class="big">⚠️</div><p>Impossible de charger les données pour le moment.</p></div>`;
+  }
+  const allLatest = latestPerWagon(entries);
+  if(allLatest.length === 0){
+    return `<div class="empty"><div class="big">🚃</div><p>Aucune donnée pour l'instant.<br>Ajoutez une saisie pour commencer le suivi.</p></div>`;
+  }
+  const latest = dashboardLatest();
+  const counts = {}; STATUSES.forEach(s => counts[s]=0);
+  latest.forEach(e => { if(counts[e.status]!==undefined) counts[e.status]++; });
+  counts["Réformé"] = reformPendingRows(latest).length;
+
+  // Parc actuel : Disponible = état actuel. Non disponible = tout ce qui n'est pas Disponible,
+  // y compris les wagons en réforme. La réforme reste un sous-ensemble du non-disponible.
+  const availableTotal = counts["Disponible"];
+  const nonAvailableTotal = latest.length - availableTotal;
+  const reformesEnCours = counts["Réformé"];
+  const parcSuivi = latest.length;
+  const immobilizedTotal = counts["Immobilisé"] + counts["Réformé"];
+
+  const currentWeek = isoWeekDefault();
+  const newImmobilisations = statusTransitionEntries("Immobilisé", currentWeek).length;
+  const released = statusTransitionEntries("Disponible", currentWeek).length;
+  const reformes = statusTransitionEntries("Réformé", currentWeek).length;
+
+  const currentProblems = latest.filter(e => problemStatus(e.status));
+  const ages = currentProblems.map(e => ({ entry:e, start:currentEpisodeStart(e), days:episodeAgeDays(e) ?? 0 }));
+  const aged = [7,15,30].map(n => ages.filter(x => x.days >= n).length);
+
+  const siteOptions = ["Tous", ...SITES].map(s => `<button class="filter-chip ${state.dashboardSite===s?'active':''}" data-dash-site="${esc(s)}">${esc(s)}</button>`).join("");
+  const statusOptions = ["Tous", ...STATUSES].map(s => `<button class="filter-chip ${state.dashboardStatus===s?'active':''}" data-dash-status="${esc(s)}">${esc(s)}</button>`).join("");
+
+  const statBoxes = `
+    <div class="dashboard-overview-card">
+      <div class="dashboard-main-kpis">
+        <div class="main-kpi dispo"><div class="kpi-icon">✓</div><div class="num">${availableTotal}</div><div class="lab">Disponibles</div><div class="sub">Wagons aptes à l'exploitation</div></div>
+        <div class="main-kpi non-dispo"><div class="kpi-icon">⊘</div><div class="num">${nonAvailableTotal}</div><div class="lab">Non disponibles</div><div class="sub">Total des wagons indisponibles</div></div>
+        <div class="main-kpi repar"><div class="kpi-icon">⚒</div><div class="num">${counts["En réparation"]}</div><div class="lab">En réparation</div><div class="sub">Wagons en cours de réparation</div></div>
+        <div class="main-kpi attente"><div class="kpi-icon">◷</div><div class="num">${counts["En attente"]}</div><div class="lab">En attente</div><div class="sub">Wagons en attente d'action</div></div>
+        <div class="main-kpi reforme"><div class="kpi-icon">♻</div><div class="num">${reformesEnCours}</div><div class="lab">Réformés</div><div class="sub">Wagons déclarés réformés</div></div>
+        <div class="main-kpi parc"><div class="kpi-icon">▥</div><div class="num">${parcSuivi}</div><div class="lab">Wagons suivis</div><div class="sub">Nombre total de wagons enregistrés</div></div>
+      </div>
+    </div>`;
+
+  const nonAvailableBreakdown = `
+    <div class="nonavailable-panel">
+      <h2 class="section-title">☷ État des non disponibles</h2>
+      <p class="help-text">Les wagons réformés restent inclus dans « Immobilisés » tant qu'ils ne sont pas déclarés « Disponible ».</p>
+      <div class="treatment-grid">
+        <div><b>${immobilizedTotal}</b><span>Immobilisés</span></div>
+        <div><b>${counts["En réparation"]}</b><span>En réparation</span></div>
+        <div><b>${counts["En attente"]}</b><span>En attente</span></div>
+      </div>
+    </div>`;
+
+  const weeklyHtml = `
+    <div class="card">
+      <h2 class="section-title">Indicateurs de la semaine · ${esc(currentWeek)}</h2>
+      <div class="kpi-grid">
+        <div><b>${newImmobilisations}</b><span>Nouveaux immobilisés</span></div>
+        <div><b>${released}</b><span>Remis à disposition</span></div>
+        <div><b>${reformes}</b><span>Réformes enregistrées</span></div>
+      </div>
+    </div>`;
+
+  const currentProblem = latest.filter(e => ["Immobilisé","En réparation","En attente"].includes(e.status));
+  const motifMap = new Map();
+  currentProblem.forEach(e => { motifValues(e).filter(m=>m!=="Aucune").forEach(m=>motifMap.set(m,(motifMap.get(m)||0)+1)); });
+  const topMotifs = [...motifMap.entries()].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0])).slice(0,5);
+  const motifHtml = topMotifs.length ? topMotifs.map(([m,n])=>`<div class="metric-row"><span>${esc(m)}</span><strong>${n}</strong></div>`).join("") : `<div class="muted-small">Aucune anomalie/motif sur les situations en cours.</div>`;
+
+  const bySite = SITES.map(site => {
+    const rows = allLatest.filter(e => e.site === site);
+    const reform = rows.filter(e => isReformPending(e)).length;
+    const nonDisp = rows.filter(e => e.status !== "Disponible").length;
+    return `<div class="metric-row"><div><b>${esc(site)}</b><div class="muted-small">${rows.length} wagon${rows.length>1?'s':''} · ${nonDisp} non disponible${nonDisp>1?'s':''} · ${reform} réforme${reform>1?'s':''}</div></div><strong>${rows.length}</strong></div>`;
+  }).join("");
+
+  const weeks=[];
+  const now=new Date();
+  for(let i=5;i>=0;i--){ const d=new Date(now); d.setDate(d.getDate()-i*7); const w=isoWeekFromDate(d); weeks.push(w); }
+  const weekly = weeks.map(w=>({w,imm:statusTransitionEntries("Immobilisé",w).length,dispo:statusTransitionEntries("Disponible",w).length,reforme:statusTransitionEntries("Réformé",w).length}));
+  const weeklyHtmlCompact=weekly.map(x=>`<div class="week-row" style="grid-template-columns:72px 1fr 1fr 1fr;gap:8px;align-items:center;"><div class="week-label">${esc(x.w)}</div><div class="week-num" style="text-align:center;"><b>${x.imm}</b><div class="muted-small">imm.</div></div><div class="week-num" style="text-align:center;"><b>${x.dispo}</b><div class="muted-small">dispo.</div></div><div class="week-num" style="text-align:center;"><b>${x.reforme}</b><div class="muted-small">réf.</div></div></div>`).join("");
+
+  return `
+    <div class="card v6-filter-card">
+      <div class="filter-title">Filtres du pilotage</div>
+      <div class="filter-label">Site</div><div class="v6-filters">${siteOptions}</div>
+      <div class="filter-label">Situation</div><div class="v6-filters">${statusOptions}</div>
+      <div class="muted-small">Affichage : ${latest.length} wagon${latest.length>1?'s':''} dans le périmètre sélectionné.</div>
+    </div>
+    ${statBoxes}
+    ${nonAvailableBreakdown}
+    ${weeklyHtml}
+    <div class="card">
+      <h2 class="section-title">Wagons en cours · ancienneté & priorités</h2>
+      <p class="help-text">L'ancienneté correspond au début de l'épisode continu d'immobilisation (Immobilisé / En réparation / En attente).</p>
+      <div class="age-summary"><div><b>${aged[0]}</b><span>≥ 7 jours</span></div><div><b>${aged[1]}</b><span>≥ 15 jours</span></div><div><b>${aged[2]}</b><span>≥ 30 jours</span></div></div>
+      <div class="attention-table" style="margin-top:10px;">${ages.length ? ages.sort((a,b)=>b.days-a.days || a.entry.wagon.localeCompare(b.entry.wagon)).slice(0,20).map(x=>{const e=x.entry,cls=ageClass(x.days),start=x.start;return `<div class="attention-row" data-age-wagon="${esc(e.wagon)}"><div class="attention-top"><span class="attention-wagon">${esc(e.wagon)}</span><span class="age-badge ${cls}">${ageLabel(x.days)}</span></div><div class="attention-meta">${esc(e.status)} · ${esc(e.site)} · début épisode : ${start ? fmtDateTime(start.created_at) : "À confirmer"}${e.motif && e.motif!=="Aucune" ? " · "+esc(e.motif):""}</div></div>`}).join("") : `<div class="attention-empty">Aucun wagon actuellement en immobilisation / réparation / attente.</div>`}</div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Priorités d'action</h2>
+      <p class="help-text">Priorité basée sur l'ancienneté réelle de l'épisode et sur le maintien du statut de réforme.</p>
+      <div class="attention-table">${(()=>{const items=latest.map(e=>{const reformed=isReformPending(e),days=episodeAgeDays(e);let priority="À SURVEILLER",action="Suivi normal";if(reformed){priority="RÉFORME À TRAITER";action="Vérifier la prochaine action de réforme / acheminement"}else if(problemStatus(e.status)&&days>=30){priority="URGENT";action="Analyser le blocage et définir une action"}else if(problemStatus(e.status)&&days>=15){priority="À TRAITER";action="Programmer ou relancer l'action"}else if(problemStatus(e.status)&&days>=7){priority="À SURVEILLER";action="Suivre l'évolution"}return {wagon:e.wagon,site:e.site,status:e.status,days,priority,action}}).filter(x=>x.priority!=="À SURVEILLER" || x.days!==null);return items.slice(0,20).map(x=>`<div class="attention-row"><div class="attention-top"><span class="attention-wagon">${esc(x.wagon)}</span><span class="age-badge ${x.priority.includes('URGENT')?'a30':x.priority.includes('À TRAITER')||x.priority.includes('RÉFORME')?'a15':'a7'}">${esc(x.priority)}</span></div><div class="attention-meta">${esc(x.status)} · ${esc(x.site)}${x.days!==null?` · ${x.days} j`:""}</div><div class="muted-small" style="margin-top:4px;">${esc(x.action)}</div></div>`).join("")||`<div class="attention-empty">Aucune priorité particulière identifiée.</div>`})()}</div>
+    </div>
+    <div class="card"><h2 class="section-title">Répartition par site</h2>${bySite}</div>
+    <div class="card"><h2 class="section-title">Top motifs des situations en cours</h2>${motifHtml}</div>
+    <div class="card"><h2 class="section-title">Activité des 6 dernières semaines</h2><div class="muted-small" style="display:grid;grid-template-columns:72px 1fr 1fr 1fr;gap:8px;margin-bottom:6px;"><span>Semaine</span><span style="text-align:center">Imm.</span><span style="text-align:center">Dispo.</span><span style="text-align:center">Réf.</span></div>${weeklyHtmlCompact}</div>
+  `;
+}
+
+function viewSaisie(){
+  const prefill = state.prefillWagon ? historyForWagon(state.prefillWagon).slice(-1)[0] : null;
+  const editReformed = state.prefillWagon ? reformStateForWagon(state.prefillWagon).reformed : false;
+  const selectedSite = prefill?.site || (isVisitor() && currentUser.site !== "Tous" ? currentUser.site : SITES[0]);
+  const selectedSerie = prefill?.serie || (state.prefillWagon ? serieFromWagon(state.prefillWagon) : null) || SERIES[0];
+  return `
+    <div class="card">
+      <h2 class="section-title">${prefill ? "Modifier la situation du wagon" : "Nouvelle saisie"}</h2>
+      ${prefill ? `<div class="help-text">Wagon <strong>${esc(prefill.wagon)}</strong> · Une nouvelle saisie sera ajoutée à l'historique sans supprimer l'ancienne.</div>` : ""}
+      <form id="saisieForm">
+        <label>Semaine</label>
+        <input type="text" name="week" value="${esc(isoWeekDefault())}" required>
+
+        <label>Site</label>
+        <select name="site" required>
+          <option value="">Choisir un site</option>
+          ${SITES.map(site => {
+            const allowed = isController() || site===currentUser.site || editReformed;
+            return allowed ? `<option value="${esc(site)}" ${site===selectedSite?'selected':''}>${esc(site)}</option>` : "";
+          }).join("")}
+        </select>
+
+        <label>Numéro de wagon</label>
+        <input type="tel" name="wagon" inputmode="numeric" maxlength="7" placeholder="7 chiffres" value="${esc(prefill?.wagon || state.prefillWagon || "")}" required>
+        <div class="field-error" id="wagonError">Le numéro doit contenir exactement 7 chiffres.</div>
+
+        <label>Série</label>
+        <select name="serie">
+          ${SERIES.map(serie => `<option value="${esc(serie)}" ${serie===selectedSerie?'selected':''}>${esc(serie)}</option>`).join("")}
+        </select>
+
+        <label>Situation</label>
+        <select name="status" required>
+          ${STATUSES.map(status => `<option value="${esc(status)}" ${status===(prefill?.status || "Immobilisé")?'selected':''}>${esc(status)}</option>`).join("")}
+        </select>
+
+        <label>Motif(s) / anomalie(s)</label>
+        <details class="motif-dropdown">
+          <summary><span id="motifSummary">Choisir un ou plusieurs motifs</span></summary>
+          <div class="motif-dropdown-list">
+            ${MOTIFS.filter(motif=>motif!=="Aucune").map(motif => `<label class="motif-option"><input type="checkbox" name="motifs" value="${esc(motif)}" ${(motifValues(prefill?.motif).includes(motif))?'checked':''}> <span>${esc(motif)}</span></label>`).join("")}
+          </div>
+        </details>
+        <label class="motif-none"><input type="checkbox" name="motifAucune" value="Aucune" ${(!prefill?.motif || prefill?.motif==="Aucune" || motifValues(prefill?.motif).includes("Aucune"))?'checked':''}> <span>Aucune anomalie renseignée</span></label>
+        <p class="help-text motif-help">Ouvre la liste avec la flèche. Plusieurs choix sont possibles (ex. Frein + Caisse).</p>
+
+        <label>Étiquette mod:</label>
+        <select name="isolation">
+          ${ISOLATION_CODES.map(code => `<option value="${esc(code)}" ${code===(prefill?.isolation || "Aucun")?'selected':''}>${esc(code)}</option>`).join("")}
+        </select>
+
+        <label>Observation</label>
+        <textarea name="observation" placeholder="Remarque, levée officielle, acheminement...">${esc(prefill?.observation || "")}</textarea>
+
+        <div class="v10-user-meta" style="margin-top:12px">Saisie enregistrée sous le compte : <strong>${esc(currentUser.name)}</strong></div>
+        <button class="btn" type="submit">${prefill ? "Enregistrer la nouvelle situation" : "Enregistrer"}</button>
+        ${prefill ? `<button class="btn secondary" type="button" id="cancelEdit">Annuler</button>` : ""}
+      </form>
+    </div>
+  `;
+}
+
+function viewSituation(){
+  const rows = filteredSituation();
+  const chips = ["Tous", ...SITES].map(s => `
+    <button data-site="${esc(s)}" class="${state.filterSite===s ? 'active':''}">${esc(s)}</button>
+  `).join("");
+
+  const list = rows.length === 0
+    ? `<div class="empty"><div class="big">🔍</div><p>Aucun wagon ne correspond à cette recherche.</p></div>`
+    : rows.map(e => wagonCardHTML(e)).join("");
+
+  return `
+    <div class="search-row">
+      <input type="tel" inputmode="numeric" id="searchInput" placeholder="Rechercher un numéro de wagon" value="${esc(state.search)}">
+    </div>
+    ${isVisitor()
+      ? `<div class="site-scope-note">Situation : <strong>${esc(currentUser.site)}</strong> · Recherche wagon : tous les sites</div>`
+      : `<div class="site-filter" id="siteFilter">${chips}</div>`}
+    ${list}
+  `;
+}
+
+function wagonCardHTML(e){
+  const col = STATUS_COLOR[e.status] || STATUS_COLOR["En attente"];
+  return `
+    <div class="wagon-card" data-wagon="${esc(e.wagon)}">
+      <div class="bar" style="background:${col.c}"></div>
+      <div class="body">
+        <div class="row1">
+          <span class="num">${esc(e.wagon)}</span>
+          <span class="badge" style="color:${col.c};background:${col.bg}">${esc(e.status)}</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-tag">${esc(e.site)}</span>
+          <span class="meta-tag">${esc(e.serie)}</span>
+          <span class="meta-tag">Sem. ${esc(e.week)}</span>
+          ${e.motif && e.motif !== "Aucune" ? `<span class="meta-tag">${esc(e.motif)}</span>` : ""}
+          ${e.isolation && e.isolation !== "Aucun" ? `<span class="meta-tag">Étiquette mod: ${esc(e.isolation)}</span>` : ""}
+          ${isReformPending(e) ? `<span class="meta-tag">Réforme en cours</span>` : ""}
+        </div>
+        ${e.observation ? `<div class="card-obs">${esc(e.observation)}</div>` : ""}
+        <div class="card-foot">${esc(e.visitor || "Agent non renseigné")} · ${fmtDateTime(e.created_at)}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn secondary wagon-history-btn" type="button" data-wagon-action="history" data-wagon="${esc(e.wagon)}">Historique</button>
+          ${(!isVisitor() || e.site===currentUser.site || isReformPending(e)) ? `<button class="btn wagon-edit-btn" type="button" data-wagon-action="edit" data-wagon="${esc(e.wagon)}">Modifier la situation</button>` : ""}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function viewPilotage(){
+  if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
+  if(!storageOk) return bannerHTML()+`<div class="empty"><p>Données indisponibles.</p></div>`;
+  // Pilotage = analyse globale indépendante des filtres du Tableau de bord.
+  const latest = latestPerWagon(entries);
+  const allLatest = latest;
+  const currentProblems = latest.filter(e => problemStatus(e.status));
+  const ages = currentProblems.map(e => ({entry:e,start:currentEpisodeStart(e),days:episodeAgeDays(e) ?? 0}))
+    .sort((a,b)=>b.days-a.days || a.entry.wagon.localeCompare(b.entry.wagon));
+  const aged7=ages.filter(x=>x.days>=7).length, aged15=ages.filter(x=>x.days>=15).length, aged30=ages.filter(x=>x.days>=30).length;
+  const motifMap=new Map();
+  currentProblems.forEach(e=>{motifValues(e).filter(m=>m!=="Aucune").forEach(m=>motifMap.set(m,(motifMap.get(m)||0)+1));});
+  const motifs=[...motifMap.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,8);
+  const siteRows=SITES.map(site=>{
+    const rows=allLatest.filter(e=>e.site===site);
+    const problems=rows.filter(e=>problemStatus(e.status)).length;
+    const reformes=rows.filter(e=>isReformPending(e)).length;
+    const nonDisponibles=rows.filter(e=>e.status!=="Disponible" || isReformPending(e)).length;
+    const reparations=rows.filter(e=>e.status==="En réparation").length;
+    const attentes=rows.filter(e=>e.status==="En attente").length;
+    const oldest=rows.filter(e=>problemStatus(e.status)).map(e=>episodeAgeDays(e)??0);
+    const maxAge=oldest.length?Math.max(...oldest):0;
+    return `<div class="metric-row"><div><b>${esc(site)}</b><div class="muted-small">${rows.length} suivis · ${nonDisponibles} non disponibles · ${problems} en cours · ${reformes} réformés · ${reparations} réparation · ${attentes} attente · ancienneté max ${maxAge} j</div></div><strong>${nonDisponibles}</strong></div>`;
+  }).join("");
+  const reformPriorityRows = allLatest.filter(e=>isReformPending(e)).map(e=>({entry:e,start:currentEpisodeStart(e),days:episodeAgeDays(e) ?? 0}));
+  const priorityRows=[...reformPriorityRows,...ages.filter(x=>!isReformPending(x.entry)&&x.days>=7)].slice(0,20).map(x=>{
+    const e=x.entry; const reform=isReformPending(e);
+    const label=reform?"RÉFORME À TRAITER":x.days>=30?"URGENT":x.days>=15?"À TRAITER":"À SURVEILLER";
+    const action=reform?"Vérifier l'action de réforme ou l'acheminement":x.days>=30?"Analyser le blocage et définir une action":x.days>=15?"Programmer ou relancer l'intervention":"Maintenir le suivi";
+    return `<div class="attention-row"><div class="attention-top"><span class="attention-wagon">${esc(e.wagon)}</span><span class="age-badge ${label==='URGENT'?'a30':label==='À SURVEILLER'?'a7':'a15'}">${label}</span></div><div class="attention-meta">${esc(e.status)} · ${esc(e.site)} · ${x.days} j</div><div class="muted-small" style="margin-top:4px">${esc(action)}</div></div>`;
+  }).join("") || `<div class="attention-empty">Aucune priorité identifiée.</div>`;
+  const motifRows=motifs.map(([m,n])=>`<div class="metric-row"><span>${esc(m)}</span><strong>${n}</strong></div>`).join("") || `<div class="attention-empty">Aucun motif renseigné sur les situations en cours.</div>`;
+  const weeks=[]; const now=new Date();
+  for(let i=5;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i*7);weeks.push(isoWeekFromDate(d));}
+  const weekly=weeks.map(w=>({w,imm:statusTransitionEntries("Immobilisé",w).length,dispo:statusTransitionEntries("Disponible",w).length,reforme:statusTransitionEntries("Réformé",w).length}));
+  const weeklyRows=weekly.map(x=>`<div class="week-row" style="grid-template-columns:72px 1fr 1fr 1fr;gap:8px;align-items:center"><div class="week-label">${esc(x.w)}</div><div class="week-num" style="text-align:center"><b>${x.imm}</b><div class="muted-small">imm.</div></div><div class="week-num" style="text-align:center"><b>${x.dispo}</b><div class="muted-small">dispo.</div></div><div class="week-num" style="text-align:center"><b>${x.reforme}</b><div class="muted-small">réf.</div></div></div>`).join("");
+  return `<div class="card"><h2 class="section-title">Pilotage opérationnel · Analyse & décision</h2><p class="help-text">Cette vue complète le Tableau de bord : elle ne répète pas les compteurs de situation. Elle met l'accent sur les priorités, l'ancienneté, les motifs et les écarts par site.</p></div>
+  <div class="card"><h2 class="section-title">Ancienneté des épisodes en cours</h2><div class="age-summary"><div><b>${aged7}</b><span>≥ 7 jours</span></div><div><b>${aged15}</b><span>≥ 15 jours</span></div><div><b>${aged30}</b><span>≥ 30 jours</span></div></div><p class="help-text">Seuils internes de pilotage, non réglementaires.</p></div>
+  <div class="card"><h2 class="section-title">Priorités d'action</h2><div class="attention-table">${priorityRows}</div></div>
+  <div class="card"><h2 class="section-title">Analyse par site</h2>${siteRows}</div>
+  <div class="card"><h2 class="section-title">Motifs des situations en cours</h2>${motifRows}</div>
+  <div class="card"><h2 class="section-title">Évolution hebdomadaire</h2><div class="muted-small" style="display:grid;grid-template-columns:72px 1fr 1fr 1fr;gap:8px;margin-bottom:6px"><span>Semaine</span><span style="text-align:center">Imm.</span><span style="text-align:center">Dispo.</span><span style="text-align:center">Réf.</span></div>${weeklyRows}</div>
+  ${auditPanelHTML()}
+  <div class="card"><h2 class="section-title">Décisions à préparer</h2><div class="attention-row"><b>1. Wagons ≥ 15 jours</b><div class="muted-small">Identifier le responsable, le blocage et la prochaine échéance.</div></div><div class="attention-row"><b>2. Réformes en cours</b><div class="muted-small">Vérifier la situation d'acheminement et les actions restantes.</div></div><div class="attention-row"><b>3. Écarts entre sites</b><div class="muted-small">Comparer les volumes en cours et les délais afin de cibler les relances.</div></div></div>`;
+}
+function viewUsers(){
+  if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
+  const profilesHtml = userProfiles.length
+    ? userProfiles.map(p=>`
+      <div class="user-item" data-profile-id="${esc(p.id)}">
+        <div class="top"><strong>${esc(p.nom||p.email||"Utilisateur")}</strong><span class="role-pill">${esc(p.role==="controller"?"Contrôleur":"Visiteur")}</span></div>
+        <small>${esc(p.email||"")} · ${p.actif===false?"Inactif":"Actif"}</small>
+        <label>Nom affiché<input data-profile-name value="${esc(p.nom||"")}"></label>
+        <label>Rôle<select data-profile-role><option value="visitor" ${p.role!=="controller"?"selected":""}>Visiteur</option><option value="controller" ${p.role==="controller"?"selected":""}>Contrôleur matériel</option></select></label>
+        <label>Site affecté<select data-profile-site><option value="Tous" ${p.site==="Tous"?"selected":""}>Tous</option>${SITES.map(s=>`<option value="${esc(s)}" ${p.site===s?"selected":""}>${esc(s)}</option>`).join("")}</select></label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input data-profile-active type="checkbox" style="width:20px" ${p.actif!==false?"checked":""}> Compte actif</label>
+        <button class="btn secondary" type="button" data-save-profile>Enregistrer le profil</button>
+      </div>`).join("")
+    : `<div class="attention-empty">Aucun profil trouvé. Crée d'abord les comptes dans Supabase Authentication puis exécute le script de préparation des profils.</div>`;
+  return `<div class="card"><h2 class="section-title">Comptes utilisateurs</h2>
+    <p class="help-text">Les comptes et mots de passe sont gérés par <strong>Supabase Authentication</strong>. Cette page permet au Contrôleur matériel d'affecter le rôle, le site et l'état actif de chaque compte.</p>
+    <div class="storage-status"><span class="dot"></span><div><strong>Authentification centralisée active</strong><div class="small">${userProfiles.length} profil(s) chargé(s)</div></div></div>
+  </div>
+  <div class="card"><h2 class="section-title">Profils et affectations</h2><div class="user-list">${profilesHtml}</div></div>
+  <div class="card"><h2 class="section-title">Règles du pilote</h2><ul class="security-list">
+    <li>Les visiteurs consultent tous les sites.</li>
+    <li>Un visiteur saisit normalement sur son site affecté.</li>
+    <li>Un wagon en réforme peut être modifié par un visiteur depuis n'importe quel site pour permettre son transfert vers réparation.</li>
+    <li>Le Contrôleur matériel conserve les droits globaux.</li>
+    <li>Chaque nouvelle modification est ajoutée à l'historique sans écraser les saisies précédentes.</li>
+  </ul></div>`;
+}
+function viewExport(){
+  if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
+  const latest = latestPerWagon(entries);
+  const lastSaved = lastSavedAt ? fmtDateTime(lastSavedAt) : "Jamais";
+  return `
+    <div class="card">
+      <h2 class="section-title">📑 Bilans & exports</h2>
+      <p class="v9-note">Prépare un bilan à partir des données réellement enregistrées. Les exports peuvent ensuite être modifiés avant diffusion.</p>
+      <div class="report-grid">
+        <label>Période de début<input type="date" id="reportStart"></label>
+        <label>Période de fin<input type="date" id="reportEnd"></label>
+        <label>Site<select id="reportSite"><option>Tous</option>${SITES.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></label>
+        <label>Format de période<select id="reportPeriod"><option value="month">Mois</option><option value="week">Semaine</option><option value="custom">Personnalisée</option></select></label>
+      </div>
+      <div class="export-actions">
+        <button class="btn" id="exportCompleteDossier">📄 Générer le bilan (HTML)</button>
+        <button class="btn secondary" id="printReport">🖨️ Ouvrir le bilan pour impression / PDF</button>
+        <button class="btn secondary" id="exportExcel">📊 Exporter le tableau Excel (.xls)</button>
+        <button class="btn secondary" id="exportDetails">🗂️ Exporter toutes les données détaillées (CSV)</button>
+        <p class="help-text" style="margin:0">Le bilan est séparé des données détaillées. Les fichiers peuvent être ouverts et modifiés sur Excel ou Word avant diffusion.</p>
+      </div>
+      <div id="exportPreview" class="card" style="display:none;margin-top:12px"></div>
+      <p class="help-text">Le bilan généré contient une synthèse, les KPI, les tableaux statistiques et les graphiques. Le fichier HTML est modifiable et peut être imprimé en PDF depuis le téléphone ou le PC.</p>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Sauvegarde & mémoire</h2>
+      <div class="storage-status ${storageOk ? "ok" : "bad"}">
+        <span class="dot"></span><div><strong>${storageOk ? "Base centrale opérationnelle" : "Problème de connexion à la base centrale"}</strong><div class="small">Dernière sauvegarde automatique : ${esc(lastSaved)}</div></div>
+      </div>
+      <div class="backup-stats"><div><b>${entries.length}</b><span>saisies conservées</span></div><div><b>${latest.length}</b><span>wagons suivis</span></div></div>
+      <button class="btn" id="exportBackup">💾 Sauvegarder toute la mémoire (JSON)</button>
+      <button class="btn secondary" id="importBackup">📥 Importer une sauvegarde</button>
+      <input type="file" id="backupFile" accept=".json,application/json" hidden>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Données brutes</h2>
+      <button class="btn secondary" id="exportSituation">Exporter la situation actuelle (CSV)</button>
+      <button class="btn secondary" id="exportHistorique">Exporter l'historique complet (CSV)</button>
+      <p class="help-text">Les CSV sont adaptés à Excel et permettent de retraiter les données avant intégration dans tes bilans.</p>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Sécurité des données</h2>
+      <ul class="security-list"><li>Chaque enregistrement possède son propre identifiant et numéro de séquence.</li><li>Les nouvelles saisies n'écrasent pas les anciennes.</li><li>Une saisie annulée reste visible dans l'historique.</li><li>Les données des wagons sont centralisées dans Supabase et synchronisées entre les téléphones connectés au même pilote.</li><li>Les mots de passe sont gérés uniquement par Supabase Authentication et ne sont jamais enregistrés dans cette application.</li></ul>
+    </div>
+    ${auditPanelHTML()}`;
+}
+
+function reportRows(){
+  const start=document.getElementById("reportStart")?.value||"";
+  const end=document.getElementById("reportEnd")?.value||"";
+  const site=document.getElementById("reportSite")?.value||"Tous";
+  if(start && end && start>end) throw new Error("La période de début doit précéder la période de fin");
+  let rows=activeEntries().filter(e=>{
+    const day=String(e.created_at||"").slice(0,10);
+    return (!start || day>=start) && (!end || day<=end) && (site==="Tous" || e.site===site);
+  });
+  return {rows,start,end,site};
+}
+function reportSnapshot(){
+  const {rows,start,end,site}=reportRows();
+  const all=latestPerWagon(activeEntries()).filter(e=>site==="Tous"||e.site===site);
+  const inPeriod=latestPerWagon(rows);
+  const currentProblems=inPeriod.filter(e=>problemStatus(e.status));
+  const reformes=inPeriod.filter(e=>isReformPending(e)).length;
+  const anomalies=rows.reduce((n,e)=>n+motifValues(e).filter(m=>m!=="Aucune").length,0);
+  const resolved=rows.filter(e=>e.status==="Disponible").length;
+  const bySite=SITES.map(s=>({
+    site:s,
+    wagons:all.filter(e=>e.site===s).length,
+    imm:all.filter(e=>e.site===s && (e.status==="Immobilisé" || isReformPending(e))).length,
+    repar:all.filter(e=>e.site===s && e.status==="En réparation").length,
+    attente:all.filter(e=>e.site===s && e.status==="En attente").length,
+    reforme:all.filter(e=>e.site===s && isReformPending(e)).length
+  })).filter(x=>site==="Tous"||x.site===site);
+  const motifMap={};
+  currentProblems.forEach(e=>motifValues(e).filter(m=>m!=="Aucune").forEach(m=>motifMap[m]=(motifMap[m]||0)+1));
+  const motifs=Object.entries(motifMap).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([motif,count])=>({motif,count}));
+  const weekMap={};
+  rows.forEach(e=>{const w=e.week||isoWeekFromDate(e.created_at); if(!weekMap[w])weekMap[w]={week:w,saisies:0,imm:0,dispo:0,reforme:0}; weekMap[w].saisies++; if(e.status==="Immobilisé")weekMap[w].imm++; if(e.status==="Disponible")weekMap[w].dispo++; if(e.status==="Réformé")weekMap[w].reforme++;});
+  const weeks=Object.values(weekMap).sort((a,b)=>String(a.week).localeCompare(String(b.week)));
+  const taux=rows.length?Math.round(resolved/rows.length*100):0;
+  const age7=currentProblems.filter(e=>(episodeAgeDays(e)||0)>=7).length;
+  const age15=currentProblems.filter(e=>(episodeAgeDays(e)||0)>=15).length;
+  const age30=currentProblems.filter(e=>(episodeAgeDays(e)||0)>=30).length;
+  return {start,end,site,rows,all,inPeriod,bySite,motifs,weeks,kpi:{parc:inPeriod.length,reformes,nouveaux:rows.filter(e=>e.status==="Immobilisé").length,liberes:rows.filter(e=>e.status==="Disponible").length,anomalies,resolved,taux,actions:rows.filter(e=>["En réparation","En attente"].includes(e.status)).length,age7,age15,age30}};
+}
+function escHtml(v){return esc(String(v??""));}
+function reportTitle(r){return `Bilan matériel remorqué FRET${r.site!=="Tous"?" — "+r.site:""}`;}
+function reportPeriodLabel(r){return `${r.start||"Début non précisé"} → ${r.end||"Fin non précisée"}`;}
+function svgActivity(r){
+  const W=900,H=300,left=60,right=25,top=30,bottom=55; const plotW=W-left-right,plotH=H-top-bottom;
+  const max=Math.max(1,...r.weeks.map(x=>x.saisies)); const step=r.weeks.length?plotW/r.weeks.length:plotW;
+  const bars=r.weeks.map((item,i)=>{const bw=Math.max(18,step*.62),h=plotH*item.saisies/max,x0=left+i*step+(step-bw)/2;return `<rect x="${x0.toFixed(1)}" y="${(top+plotH-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="#2C4A63"/><text x="${(x0+bw/2).toFixed(1)}" y="${H-25}" text-anchor="middle" font-size="11">${escHtml(item.week)}</text><text x="${(x0+bw/2).toFixed(1)}" y="${Math.max(16,top+plotH-h-6).toFixed(1)}" text-anchor="middle" font-size="11">${item.saisies}</text>`}).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/><line x1="${left}" y1="${top+plotH}" x2="${W-right}" y2="${top+plotH}" stroke="#999"/><line x1="${left}" y1="${top}" x2="${left}" y2="${top+plotH}" stroke="#999"/>${bars}</svg>`;
+}
+function svgSites(r){
+  const W=900,H=340,left=70,right=25,top=25,bottom=70,plotW=W-left-right,plotH=H-top-bottom; const max=Math.max(1,...r.bySite.map(x=>x.wagons)); const step=r.bySite.length?plotW/r.bySite.length:plotW; const bars=r.bySite.map((x,i)=>{const bw=Math.max(20,step*.55),h=plotH*x.wagons/max,xx=left+i*step+(step-bw)/2;return `<rect x="${xx.toFixed(1)}" y="${(top+plotH-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="#3E647F"/><text x="${(xx+bw/2).toFixed(1)}" y="${H-38}" text-anchor="middle" font-size="10">${escHtml(x.site.replace('Beni Ansar (','Beni Ansar '))}</text><text x="${(xx+bw/2).toFixed(1)}" y="${Math.max(15,top+plotH-h-6).toFixed(1)}" text-anchor="middle" font-size="11">${x.wagons}</text>`}).join(""); return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/><line x1="${left}" y1="${top+plotH}" x2="${W-right}" y2="${top+plotH}" stroke="#999"/><line x1="${left}" y1="${top}" x2="${left}" y2="${top+plotH}" stroke="#999"/>${bars}</svg>`;
+}
+function svgMotifs(r){
+  const data=r.motifs.slice(0,10), W=900,H=Math.max(220,70+data.length*30),left=190,right=50,top=20,bottom=25,plotW=W-left-right,max=Math.max(1,...data.map(x=>x.count)); const rows=data.map((x,i)=>{const y=top+i*30,w=plotW*x.count/max;return `<text x="${left-10}" y="${y+17}" text-anchor="end" font-size="11">${escHtml(x.motif)}</text><rect x="${left}" y="${y}" width="${w.toFixed(1)}" height="20" fill="#2C4A63"/><text x="${Math.min(W-10,left+w+7)}" y="${y+15}" font-size="11">${x.count}</text>`}).join(""); return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/>${rows}</svg>`;
+}
+function downloadSvg(svg,filename){downloadBlob(`<?xml version="1.0" encoding="UTF-8"?>\n${svg}`,filename,"image/svg+xml;charset=utf-8");}
+function buildReportHTML(r){
+  const k=r.kpi;
+  const siteRows=r.bySite.map(x=>`<tr><td>${escHtml(x.site)}</td><td>${x.wagons}</td><td>${x.imm}</td><td>${x.repar}</td><td>${x.attente}</td><td>${x.reforme}</td></tr>`).join("");
+  const motifRows=r.motifs.map(x=>`<tr><td>${escHtml(x.motif)}</td><td>${x.count}</td></tr>`).join("");
+  const weekRows=r.weeks.map(x=>`<tr><td>${escHtml(x.week)}</td><td>${x.saisies}</td><td>${x.imm}</td><td>${x.dispo}</td><td>${x.reforme}</td></tr>`).join("");
+  const chart=`<div class="chart"><h3>Évolution des saisies par semaine</h3><svg viewBox="0 0 900 300" role="img" aria-label="Graphique des saisies par semaine"><line x1="60" y1="250" x2="860" y2="250" stroke="#999"/><line x1="60" y1="30" x2="60" y2="250" stroke="#999"/>${r.weeks.map((x,i)=>{const max=Math.max(1,...r.weeks.map(w=>w.saisies));const bw=Math.min(60,700/Math.max(1,r.weeks.length));const h=200*x.saisies/max;const x0=75+i*(780/Math.max(1,r.weeks.length));return `<rect x="${x0}" y="${250-h}" width="${bw}" height="${h}" fill="#2C4A63"/><text x="${x0+bw/2}" y="270" text-anchor="middle" font-size="11">${escHtml(x.week)}</text><text x="${x0+bw/2}" y="${240-h}" text-anchor="middle" font-size="11">${x.saisies}</text>`}).join("")}</svg></div>`;
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escHtml(reportTitle(r))}</title><style>body{font-family:Arial,sans-serif;margin:32px;color:#16232E}h1{margin-bottom:4px}h2{margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:6px}.meta{color:#5B6B7A}.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.box{border:1px solid #ddd;border-radius:8px;padding:12px}.box b{display:block;font-size:24px}.box span{font-size:12px;color:#5B6B7A}table{border-collapse:collapse;width:100%;margin-top:10px}th,td{border:1px solid #ddd;padding:7px;text-align:left}th{background:#f1f3f5}.chart{margin-top:18px;border:1px solid #ddd;padding:12px}svg{width:100%;height:auto}@media print{body{margin:15mm}.no-print{display:none}}
+
+/* V11.2 · Palette opérationnelle — conserver l'identité visuelle validée */
+:root{
+  --bg:#EEF3F7;
+  --surface:#FFFFFF;
+  --border:#D9E2EA;
+  --text:#17324A;
+  --muted:#607487;
+  --primary:#15557D;
+  --primary-light:#1F6F9F;
+  --primary-bg:#E4F0F7;
+  --green:#16A765;
+  --green-bg:#DDF5E9;
+  --red:#E94B55;
+  --red-bg:#FCE3E5;
+  --amber:#FFB71B;
+  --amber-bg:#FFF1C9;
+  --purple:#6E4BC4;
+  --teal:#12A7A7;
+  --sky:#4AA7E8;
+  --navy:#244D70;
+}
+body{background:var(--bg);color:var(--text)}
+header.top{background:linear-gradient(135deg,#174D73 0%,#1B628F 100%);}
+header.top p{color:#C9DFEE}
+.user-chip{background:rgba(255,255,255,.14)}
+.role-pill{background:#E9F3F9;color:#244D70}
+nav.tabbar{background:#fff;border-top:1px solid #D7E1E9;box-shadow:0 -5px 18px rgba(23,50,74,.06)}
+nav.tabbar button.active{color:#15557D;background:#E3EFF7}
+.card,.wagon-card,.stat-box,.treatment-grid>div,.attention-row{box-shadow:0 2px 10px rgba(23,50,74,.045)}
+.btn{background:#15557D}
+.btn:active{background:#1F6F9F}
+
+/* KPI — couleurs pleines comme sur la maquette validée */
+.stat-grid .stat-box{border:none;color:#fff;min-height:74px;display:flex;flex-direction:column;justify-content:center}
+.stat-grid .stat-box .num,.stat-grid .stat-box .lab{color:#fff}
+.stat-grid .stat-box.dispo{background:#16A765}
+.stat-grid .stat-box.immob{background:#E94B55}
+.stat-grid .stat-box.repar{background:#FFB71B}
+.stat-grid .stat-box.attente{background:#2F8DDF}
+.stat-grid .stat-box.reforme{background:#6E4BC4}
+.stat-grid .stat-box:not(.dispo):not(.immob):not(.repar):not(.attente):not(.reforme){background:#12A7A7}
+.stat-grid .stat-box .lab{font-weight:650}
+
+/* Panneaux opérationnels */
+.v9-overview .v9-panel:first-child{background:#DDF5E9}
+.v9-overview .v9-panel:first-child .v9-title{color:#168353}
+.v9-overview .v9-panel:first-child b{color:#16A765}
+.v9-overview .v9-panel:nth-child(2){background:#EEE7FF}
+.v9-overview .v9-panel:nth-child(2) .v9-title{color:#6545B5}
+.v9-overview .v9-panel:nth-child(2) b{color:#6E4BC4}
+.kpi-grid>div:nth-child(1){background:#E5F0F8}
+.kpi-grid>div:nth-child(2){background:#FCE3E5}
+.kpi-grid>div:nth-child(3){background:#FFF1C9}
+.kpi-grid>div:nth-child(4){background:#E0F4F4}
+.quick-grid>div{background:#EAF2F7}
+.age-summary>div{background:#F2F6F9}
+.week-fill{background:#2F8DDF}
+.filter-chip.active,.site-filter button.active{background:#15557D;border-color:#15557D}
+.storage-status .dot{background:#16A765}
+
+/* Titres et éléments d'accent */
+.section-title{color:#17324A}
+.treatment-grid>div:nth-child(1) b{color:#E94B55}
+.treatment-grid>div:nth-child(2) b{color:#FF9F00}
+.treatment-grid>div:nth-child(3) b{color:#2F8DDF}
+.treatment-grid>div:nth-child(4) b{color:#16A765}
+.age-badge.a7{color:#148457;background:#DDF5E9}
+.age-badge.a15{color:#B36A00;background:#FFF1C9}
+.age-badge.a30{color:#D73540;background:#FCE3E5}
+
+
+/* V20: liste motifs compacte avec flèche, tout en conservant la sélection multiple */
+.motif-dropdown{border:1px solid var(--border);border-radius:12px;background:#fff;margin:8px 0 10px;overflow:hidden}
+.motif-dropdown summary{cursor:pointer;list-style:none;padding:15px 42px 15px 14px;font-weight:650;color:var(--text);position:relative}
+.motif-dropdown summary::-webkit-details-marker{display:none}
+.motif-dropdown summary::after{content:"⌄";position:absolute;right:16px;font-size:20px;top:10px;color:var(--muted)}
+.motif-dropdown[open] summary{border-bottom:1px solid var(--border);background:#F5F8FA}
+.motif-dropdown[open] summary::after{content:"⌃"}
+.motif-dropdown-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px}
+.motif-option{display:flex;align-items:center;gap:9px;min-height:44px;padding:10px;border:1px solid var(--border);border-radius:10px;background:#F7FAFC;cursor:pointer;font-weight:650;color:var(--text)}
+.motif-option input{width:20px;height:20px;accent-color:var(--primary);flex:0 0 auto}
+.motif-option:has(input:checked){border-color:var(--primary);background:#E7F1F8}
+.motif-none{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px dashed var(--border);border-radius:12px;background:#fff}
+.motif-none input{width:21px;height:21px;accent-color:var(--primary)}
+@media(max-width:520px){.motif-dropdown-list{grid-template-columns:1fr 1fr}.motif-option{padding:9px;font-size:14px}}
+</style></head><body><h1>${escHtml(reportTitle(r))}</h1><div class="meta">Période : ${escHtml(reportPeriodLabel(r))} · Généré le ${escHtml(new Date().toLocaleString("fr-FR"))}</div><h2>1. Synthèse KPI</h2><div class="kpi"><div class="box"><b>${k.liberes}</b><span>Wagons remis à disposition</span></div><div class="box"><b>${k.nouveaux}</b><span>Nouveaux immobilisés</span></div><div class="box"><b>${k.liberes}</b><span>Wagons libérés / disponibles</span></div><div class="box"><b>${k.reformes}</b><span>Réformés actuellement</span></div><div class="box"><b>${k.anomalies}</b><span>Anomalies / motifs renseignés</span></div><div class="box"><b>${k.resolved}</b><span>Situations saisies comme disponibles</span></div><div class="box"><b>${k.taux}%</b><span>Taux indicatif de disponibilité des saisies</span></div><div class="box"><b>${k.actions}</b><span>Situations en réparation / attente</span></div></div><p class="meta">Ancienneté des épisodes en cours : ≥7 j : ${k.age7} · ≥15 j : ${k.age15} · ≥30 j : ${k.age30}. Ces seuils sont des seuils de pilotage de l'application, pas des seuils réglementaires.</p><h2>2. Répartition par site</h2><table><thead><tr><th>Site</th><th>Wagons suivis</th><th>Immobilisés</th><th>En réparation</th><th>En attente</th><th>Réformés</th></tr></thead><tbody>${siteRows||'<tr><td colspan="6">Aucune donnée</td></tr>'}</tbody></table><h2>3. Motifs des situations en cours</h2><table><thead><tr><th>Motif</th><th>Nombre</th></tr></thead><tbody>${motifRows||'<tr><td colspan="2">Aucune donnée</td></tr>'}</tbody></table><h2>4. Activité par semaine</h2><table><thead><tr><th>Semaine</th><th>Saisies</th><th>Immobilisés</th><th>Disponibles</th><th>Réformés</th></tr></thead><tbody>${weekRows||'<tr><td colspan="5">Aucune donnée</td></tr>'}</tbody></table><h2>5. Graphiques</h2><div class="chart"><h3>Activité par semaine</h3>${svgActivity(r)}</div><div class="chart"><h3>Wagons suivis par site</h3>${svgSites(r)}</div><div class="chart"><h3>Top motifs des situations en cours</h3>${svgMotifs(r)}</div><h2>6. Données nominatives</h2><table><thead><tr><th>Wagon</th><th>Site</th><th>Série</th><th>Situation</th><th>Motif</th><th>Agent</th><th>Date</th></tr></thead><tbody>${r.inPeriod.map(e=>`<tr><td>${escHtml(e.wagon)}</td><td>${escHtml(e.site)}</td><td>${escHtml(e.serie)}</td><td>${escHtml(e.status)}</td><td>${escHtml(e.motif)}</td><td>${escHtml(e.visitor)}</td><td>${escHtml(fmtDateTime(e.created_at))}</td></tr>`).join("")||'<tr><td colspan="7">Aucune donnée</td></tr>'}</tbody></table><p class="meta">Document généré automatiquement à partir des saisies conservées dans l'application. Vérifier les données avant diffusion.</p></body></html>`;
+}
+function downloadBlob(content,filename,type){
+  try{
+    const blob=new Blob([content],{type});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=filename; a.rel="noopener"; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{try{a.remove();}catch(_){} try{URL.revokeObjectURL(url);}catch(_){}},10000);
+    return true;
+  }catch(err){
+    try{
+      const a=document.createElement("a");
+      a.href="data:"+type+","+encodeURIComponent(content);
+      a.download=filename; a.rel="noopener";
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>a.remove(),1000);
+      return true;
+    }catch(fallbackErr){
+      showToast("Téléchargement impossible : "+(fallbackErr?.message||err?.message||"erreur"));
+      return false;
+    }
+  }
+}
+function reportFilename(ext){return `bilan_wagons_fret_${new Date().toISOString().slice(0,10)}.${ext}`;}
+function showReportPreview(html){
+  const box=document.getElementById("exportPreview");
+  if(!box) return;
+  box.style.display="block";
+  box.innerHTML=`<h3 style="margin-top:0">Aperçu du bilan</h3><p class="help-text">Le bilan est généré ci-dessous. Utilise le bouton d’impression pour enregistrer en PDF.</p><iframe title="Aperçu du bilan" style="width:100%;min-height:520px;border:1px solid var(--border);border-radius:10px;background:#fff"></iframe>`;
+  const frame=box.querySelector("iframe");
+  frame.srcdoc=html;
+  box.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function printReport(){
+  try{
+    const r=reportSnapshot(); const html=buildReportHTML(r);
+    const w=window.open("","_blank");
+    if(!w){showReportPreview(html);showToast("Aperçu affiché : autorisez les fenêtres pour imprimer directement");return;}
+    w.document.open(); w.document.write(html); w.document.close();
+    setTimeout(()=>w.print(),700);
+  }catch(err){showToast("Erreur impression : "+(err?.message||"erreur"));}
+}
+function exportCompleteDossier(){
+  const r=reportSnapshot();
+  const html=buildReportHTML(r);
+  showReportPreview(html);
+  const ok=downloadBlob(html,reportFilename("html"),"text/html;charset=utf-8");
+  showToast(ok ? "Bilan généré et aperçu affiché. Utilise Excel pour le classeur." : "Aperçu affiché. Le navigateur bloque le téléchargement.");
+}
+
+function exportReportHtml(){
+  try{const html=buildReportHTML(reportSnapshot());showReportPreview(html);downloadBlob(html,reportFilename("html"),"text/html;charset=utf-8");showToast("Bilan HTML généré");}
+  catch(err){showToast("Erreur bilan : "+(err?.message||"erreur"));}
+}
+function exportReportWord(){
+  try{const html=buildReportHTML(reportSnapshot());downloadBlob(html,reportFilename("doc"),"application/msword;charset=utf-8");showToast("Document Word compatible généré");}
+  catch(err){showToast("Erreur Word : "+(err?.message||"erreur"));}
+}
+function exportReportExcel(){const r=reportSnapshot();const k=r.kpi;const rows=[['Bilan matériel remorqué FRET',reportPeriodLabel(r)],['Site',r.site],[],['KPI','Valeur'],['Wagons remis à disposition',k.liberes],['Nouveaux immobilisés',k.nouveaux],['Wagons libérés / disponibles',k.liberes],['Réformés',k.reformes],['Anomalies / motifs renseignés',k.anomalies],['Situations disponibles',k.resolved],['Taux indicatif',k.taux+'%'],['Situations en réparation / attente',k.actions],['≥ 7 jours',k.age7],['≥ 15 jours',k.age15],['≥ 30 jours',k.age30],[],['Répartition par site'],['Site','Wagons suivis','Immobilisés','En réparation','En attente','Réformés'],...r.bySite.map(x=>[x.site,x.wagons,x.imm,x.repar,x.attente,x.reforme]),[],['Motifs','Nombre'],...r.motifs.map(x=>[x.motif,x.count]),[],['Activité par semaine'],['Semaine','Saisies','Immobilisés','Disponibles','Réformés'],...r.weeks.map(x=>[x.week,x.saisies,x.imm,x.dispo,x.reforme])];const html=`<html><head><meta charset="utf-8"></head><body><table>${rows.map(row=>`<tr>${row.map(v=>`<td>${escHtml(v)}</td>`).join("")}</tr>`).join("")}</table></body></html>`;downloadBlob('\uFEFF'+html,reportFilename("xls"),"application/vnd.ms-excel;charset=utf-8");showToast("Fichier Excel compatible créé");}
+function exportKpiCsv(){const r=reportSnapshot();const k=r.kpi;downloadCSV(toCSV(Object.entries(k),["KPI","Valeur"],x=>x),`kpi_wagons_fret_${new Date().toISOString().slice(0,10)}.csv`);showToast("KPI exportés");}
+function exportStatsCsv(){const r=reportSnapshot();const lines=[];r.bySite.forEach(x=>lines.push({type:"site",categorie:x.site,wagons:x.wagons,immobilises:x.imm,reparation:x.repar,attente:x.attente,reformes:x.reforme}));r.motifs.forEach(x=>lines.push({type:"motif",categorie:x.motif,wagons:x.count,immobilises:"",reparation:"",attente:"",reformes:""}));downloadCSV(toCSV(lines,["Type","Catégorie","Wagons","Immobilisés","En réparation","En attente","Réformés"],x=>[x.type,x.categorie,x.wagons,x.immobilises,x.reparation,x.attente,x.reformes]),`statistiques_wagons_fret_${new Date().toISOString().slice(0,10)}.csv`);showToast("Statistiques exportées");}
+
+function exportDetailsCsv(){
+  const rows=[...entries].sort((a,b)=>String(a.created_at||"").localeCompare(String(b.created_at||"")));
+  const csv=toCSV(rows,
+    ["N° séquence","Identifiant","Wagon","Site","Série","Semaine","Situation","Réforme en cours","Motif(s)","Étiquette mod.","Observation","Agent","Saisi le","Annulée le","Motif annulation"],
+    r=>[r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,isReformPending(r)? "Oui":"Non",r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at?fmtDateTime(r.cancelled_at):"",r.cancelled_reason]
+  );
+  downloadCSV(csv,"donnees_detaillees_wagons_fret.csv");
+  showToast("Données détaillées exportées");
+}
+function bannerHTML(){
+  return `<div class="banner"><span>Erreur de chargement des données.</span><button id="retryLoad">Réessayer</button></div>`;
+}
+
+/* ---------- History modal ---------- */
+function openHistory(wagon){
+  // Historique global : tous les utilisateurs authentifiés voient toutes les étapes du wagon.
+  let rows = entries.filter(e => e.wagon === wagon);
+  rows.sort((a,b) => b.created_at.localeCompare(a.created_at));
+  const overlay = document.getElementById("modalOverlay");
+  const sheet = document.getElementById("modalSheet");
+  sheet.innerHTML = `
+    <div class="modal-head">
+      <h3>Historique — wagon ${esc(wagon)}</h3>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="hist-note">Chaque saisie est conservée. Une correction ne supprime pas l'ancien enregistrement : elle l'annule et laisse sa trace dans l'historique.</div>
+    ${rows.map(e => {
+      const col = STATUS_COLOR[e.status] || STATUS_COLOR["En attente"];
+      return `
+        <div class="hist-item ${e.cancelled_at ? "cancelled" : ""}" style="border-color:${col.c}">
+          <div class="dot" style="background:${col.c}"></div>
+          <div class="when">${fmtDateTime(e.created_at)} · Semaine ${esc(e.week)}</div>
+          <div class="st" style="color:${col.c}">${esc(e.status)}</div>
+          <div class="det">${esc(e.site)} · ${esc(e.serie)}${e.motif && e.motif!=="Aucune" ? " · " + esc(e.motif) : ""}${e.isolation && e.isolation!=="Aucun" ? " · étiquette mod: " + esc(e.isolation) : ""}</div>
+          ${e.observation ? `<div class="det">${esc(e.observation)}</div>` : ""}
+          <div class="card-foot">${esc(e.visitor || "Agent non renseigné")}</div>
+          ${e.cancelled_at ? `<div class="det" style="color:var(--red)">Saisie annulée le ${fmtDateTime(e.cancelled_at)}${e.cancelled_reason ? " · " + esc(e.cancelled_reason) : ""}</div>` : `<button class="hist-cancel" data-id="${esc(e.id)}">Annuler cette saisie</button>`}
+        </div>`;
+    }).join("")}
+  `;
+  overlay.classList.remove("hidden");
+  document.getElementById("modalClose").onclick = closeHistory;
+  sheet.querySelectorAll(".hist-cancel").forEach(btn => {
+    btn.onclick = async () => {
+      const reason = prompt("Motif d'annulation (facultatif) :", "Erreur de saisie");
+      if(reason === null) return;
+      const target = entries.find(e => e.id === btn.dataset.id);
+      if(!target || target.cancelled_at) return;
+      target.cancelled_at = new Date().toISOString();
+      target.cancelled_reason = reason.trim();
+      const ok = await saveEntries();
+      if(ok){ showToast("Saisie annulée, historique conservé"); }
+      else { target.cancelled_at = null; target.cancelled_reason = ""; showToast("Échec de l'enregistrement"); }
+      openHistory(wagon);
+      render();
+    };
+  });
+}
+function closeHistory(){
+  document.getElementById("modalOverlay").classList.add("hidden");
+}
+
+/* ---------- CSV export ---------- */
+function toCSV(rows, headers, mapper){
+  const lines = [headers.join(",")];
+  for(const r of rows){
+    lines.push(mapper(r).map(v => `"${String(v ?? "").replace(/"/g,'""')}"`).join(","));
+  }
+  return "\uFEFF" + lines.join("\r\n");
+}
+function downloadCSV(content, filename){
+  try{
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    return true;
+  }catch(err){
+    showToast("Téléchargement CSV impossible : "+(err?.message||"erreur"));
+    return false;
+  }
+}
+
+/* ---------- Event handlers ---------- */
+function validateEntryData(entry){
+  const errors=[];
+  if(!/^\d{7}$/.test(String(entry.wagon||""))) errors.push("Le numéro de wagon doit comporter 7 chiffres.");
+  if(!SITES.includes(entry.site)) errors.push("Le site est obligatoire.");
+  if(!SERIES.includes(entry.serie)) errors.push("La série est invalide.");
+  if(!STATUSES.includes(entry.status)) errors.push("La situation est invalide.");
+  const selectedMotifs=motifValues(entry.motif);
+  if(selectedMotifs.some(m=>!MOTIFS.includes(m))) errors.push("Un motif est invalide.");
+  if(!ISOLATION_CODES.includes(entry.isolation)) errors.push("L'étiquette de modification est invalide.");
+  if(!entry.visitor) errors.push("L'agent doit être identifié.");
+  if(!entry.created_at || Number.isNaN(new Date(entry.created_at).getTime())) errors.push("La date est invalide.");
+  return errors;
+}
+function auditDataQuality(){
+  const rows=activeEntries(), issues=[], ids=new Set();
+  rows.forEach(e=>{
+    const errors=validateEntryData(e);
+    if(ids.has(e.id)) errors.push("Identifiant dupliqué.");
+    ids.add(e.id);
+    if(errors.length) issues.push({wagon:e.wagon||"—",seq:e.seq||"—",errors});
+  });
+  return {total:entries.length,active:rows.length,cancelled:entries.filter(e=>e.cancelled_at).length,issues};
+}
+function auditPanelHTML(){
+  const a=auditDataQuality(), ok=a.issues.length===0;
+  return `<div class="card"><h2 class="section-title">Contrôle qualité des données</h2>
+  <div class="storage-status ${ok?"ok":"bad"}"><span class="dot"></span><div><strong>${ok?"Aucune anomalie structurelle détectée":"Anomalies à vérifier"}</strong>
+  <div class="small">${a.total} saisies conservées · ${a.active} actives · ${a.cancelled} annulées · ${a.issues.length} anomalie(s)</div></div></div>
+  ${ok?`<p class="help-text">Les champs essentiels, statuts, sites et identifiants ont été contrôlés localement.</p>`:
+  `<div class="attention-table">${a.issues.slice(0,10).map(x=>`<div class="attention-row"><b>Wagon ${esc(x.wagon)} · séquence ${esc(x.seq)}</b><div class="muted-small">${esc(x.errors.join(" "))}</div></div>`).join("")}</div>`}
+  <p class="help-text">Contrôle local uniquement : une authentification serveur reste nécessaire pour la production.</p></div>`;
+}
+function safeExport(label, fn){ try { fn(); } catch(err) { showToast(label+" : "+(err?.message||"erreur")); } }
+function attachV10Handlers(){
+  document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>{state.view=b.dataset.go;render();}));
+  document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>{if(b.hasAttribute("data-controller-only")&&!isController())return;state.view=b.dataset.view;render();}));
+}
+
+function attachViewHandlers(){
+  if(state.view === "dashboard"){
+    document.querySelectorAll("[data-dash-site]").forEach(btn => btn.addEventListener("click", () => { state.dashboardSite = btn.dataset.dashSite; render(); }));
+    document.querySelectorAll("[data-dash-status]").forEach(btn => btn.addEventListener("click", () => { state.dashboardStatus = btn.dataset.dashStatus; render(); }));
+    document.querySelectorAll("[data-age-wagon]").forEach(card => card.addEventListener("click", () => openHistory(card.dataset.ageWagon)));
+  }
+  if(state.view === "saisie"){
+    const form = document.getElementById("saisieForm");
+    if(!form) return;
+    const wagonInput = form.querySelector('input[name="wagon"]');
+    const serieSelect = form.querySelector('select[name="serie"]');
+    const statusSelect = form.querySelector('select[name="status"]');
+    const isolationSelect = form.querySelector('select[name="isolation"]');
+    // Règle métier : un wagon déclaré Disponible ne porte plus d’étiquette de modification.
+    function syncIsolationWithStatus(){
+      if(statusSelect?.value === "Disponible" && isolationSelect){
+        isolationSelect.value = "Aucun";
+      }
+    }
+    statusSelect?.addEventListener("change", syncIsolationWithStatus);
+    syncIsolationWithStatus();
+    let serieAutoSet = false; // tracks whether the current value was set automatically
+    wagonInput.addEventListener("input", () => {
+      const matched = serieFromWagon(wagonInput.value.trim());
+      if(matched){
+        serieSelect.value = matched;
+        serieAutoSet = true;
+      } else if(serieAutoSet){
+        // prefix no longer matches (e.g. user is still typing/erasing) — reset to default
+        serieSelect.value = SERIES[0];
+        serieAutoSet = false;
+      }
+    });
+    const motifChecks = [...form.querySelectorAll('input[name="motifs"]')];
+    const motifNone = form.querySelector('input[name="motifAucune"]');
+    function syncMotifChoices(source){
+      if(source === motifNone && motifNone?.checked){ motifChecks.forEach(x => x.checked = false); }
+      if(source && source !== motifNone && source.checked && motifNone){ motifNone.checked = false; }
+      if(motifNone && !motifChecks.some(x => x.checked) && !motifNone.checked){ motifNone.checked = true; }
+    }
+    const motifSummary = form.querySelector("#motifSummary");
+    function updateMotifSummary(){
+      const selected = motifChecks.filter(x=>x.checked).map(x=>x.value);
+      if(motifSummary) motifSummary.textContent = selected.length ? selected.join(" + ") : "Choisir un ou plusieurs motifs";
+    }
+    motifChecks.forEach(x => x.addEventListener("change", () => { syncMotifChoices(x); updateMotifSummary(); }));
+    motifNone?.addEventListener("change", () => { syncMotifChoices(motifNone); updateMotifSummary(); });
+    syncMotifChoices();
+    updateMotifSummary();
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(form);
+      const wagon = String(fd.get("wagon") || "").replace(/[^0-9]/g, "");
+      const wagonErr = document.getElementById("wagonError");
+      if(!/^\d{7}$/.test(wagon)){
+        wagonErr.classList.add("show");
+        return;
+      }
+      wagonErr.classList.remove("show");
+      const nextSeq = entries.reduce((m,e) => Math.max(m, Number(e.seq)||0), 0) + 1;
+      try {
+        const selectedMotifs = fd.getAll("motifs");
+        const noneSelected = !!fd.get("motifAucune");
+        const entry = {
+          id: uid(),
+          seq: nextSeq,
+          record_version: 1,
+          week: String(fd.get("week") || isoWeekDefault()).trim(),
+          site: String(fd.get("site") || ""),
+          wagon,
+          serie: String(fd.get("serie") || SERIES[0]),
+          status: String(fd.get("status") || "Immobilisé"),
+          motif: motifLabel(selectedMotifs.concat(noneSelected ? ["Aucune"] : []).filter(x=>x!=="Aucune" || noneSelected)),
+          isolation: String(fd.get("status") || "Immobilisé") === "Disponible" ? "Aucun" : String(fd.get("isolation") || "Aucun"),
+          observation: String(fd.get("observation") || "").trim(),
+          visitor: currentUser.username,
+          created_at: new Date().toISOString()
+        };
+        const editingWagon = state.prefillWagon || entry.wagon;
+        const canEditReformed = editingWagon ? reformStateForWagon(editingWagon).reformed : false;
+        if(isVisitor() && !canEditReformed && entry.site !== currentUser.site){
+          showToast("Vous ne pouvez saisir que sur votre site affecté.");
+          return;
+        }
+        const validationErrors=validateEntryData(entry);
+        if(validationErrors.length){ showToast(validationErrors[0]); return; }
+        entries.push(entry);
+        const ok = await saveEntries();
+        if(!ok){ entries.pop(); showToast("Enregistrement impossible : connexion à la base centrale indisponible"); return; }
+        showToast("Saisie enregistrée");
+        state.view = "situation";
+        state.prefillWagon = null;
+        state.prefillEntryId = null;
+        render();
+      } catch(err) {
+        showToast("Erreur de saisie : " + (err?.message || "réessayez"));
+      }
+    });
+    document.getElementById("cancelEdit")?.addEventListener("click", () => {
+      state.prefillWagon = null;
+      state.prefillEntryId = null;
+      state.view = "situation";
+      render();
+    });
+  }
+
+  if(state.view === "situation"){
+    const search = document.getElementById("searchInput");
+    search.addEventListener("input", () => {
+      state.search = search.value.replace(/\D/g,"");
+      render();
+      document.getElementById("searchInput").focus();
+      const val = document.getElementById("searchInput");
+      val.selectionStart = val.selectionEnd = val.value.length;
+    });
+    document.getElementById("siteFilter")?.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("button[data-site]");
+      if(!btn) return;
+      state.filterSite = btn.dataset.site;
+      render();
+    });
+    document.querySelectorAll(".wagon-card").forEach(card => {
+      card.addEventListener("click", (ev) => {
+        if(ev.target.closest("button")) return;
+        openHistory(card.dataset.wagon);
+      });
+    });
+    document.querySelectorAll("[data-wagon-action=history]").forEach(btn => btn.addEventListener("click", () => openHistory(btn.dataset.wagon)));
+    document.querySelectorAll("[data-wagon-action=edit]").forEach(btn => btn.addEventListener("click", () => {
+      state.prefillWagon = btn.dataset.wagon;
+      state.prefillEntryId = historyForWagon(btn.dataset.wagon).slice(-1)[0]?.id || null;
+      state.view = "saisie";
+      render();
+    }));
+  }
+
+  if(state.view === "users" && isController()){
+    document.querySelectorAll("[data-save-profile]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const card=btn.closest("[data-profile-id]");
+        const id=card?.dataset.profileId;
+        if(!id) return;
+        const ok=await saveUserProfile(id,{
+          nom:card.querySelector("[data-profile-name]")?.value||"",
+          role:card.querySelector("[data-profile-role]")?.value||"visitor",
+          site:card.querySelector("[data-profile-site]")?.value||"Tous",
+          actif:!!card.querySelector("[data-profile-active]")?.checked
+        });
+        if(ok){
+          showToast("Profil utilisateur enregistré");
+          if(id===currentUser.id){
+            const sb=getSupabaseClient();
+            const {data:{session}}=await sb.auth.getSession();
+            if(session?.user) currentUser=await buildCurrentUser(session.user);
+          }
+          render();
+        }
+      });
+    });
+  }
+
+  if(state.view === "export" && isController()){
+    document.getElementById("exportCompleteDossier")?.addEventListener("click", () => safeExport("Erreur dossier", exportCompleteDossier));
+    document.getElementById("exportKpiCsv")?.addEventListener("click", () => safeExport("Erreur KPI", exportKpiCsv));
+    document.getElementById("exportStatsCsv")?.addEventListener("click", () => safeExport("Erreur statistiques", exportStatsCsv));
+    document.getElementById("exportExcel")?.addEventListener("click", () => safeExport("Erreur Excel", exportReportExcel));
+    document.getElementById("exportDetails")?.addEventListener("click", () => safeExport("Erreur données détaillées", exportDetailsCsv));
+    document.getElementById("exportWord")?.addEventListener("click", () => safeExport("Erreur Word", exportReportWord));
+    document.getElementById("printReport")?.addEventListener("click", () => safeExport("Erreur impression", printReport));
+    document.getElementById("exportCharts")?.addEventListener("click", ()=>{const r=reportSnapshot();const d=new Date().toISOString().slice(0,10);downloadSvg(svgActivity(r),`graphique_activite_wagons_fret_${d}.svg`);downloadSvg(svgSites(r),`graphique_sites_wagons_fret_${d}.svg`);downloadSvg(svgMotifs(r),`graphique_motifs_wagons_fret_${d}.svg`);showToast("3 graphiques SVG exportés");});
+    document.getElementById("exportSituation")?.addEventListener("click", () => {
+      const rows = latestPerWagon(entries).sort((a,b)=>a.site.localeCompare(b.site)||a.wagon.localeCompare(b.wagon));
+      const csv = toCSV(rows,
+        ["Wagon","Site","Série","Semaine","Situation","Réforme en cours","Motif","Étiquette mod:","Observation","Agent","Saisi le"],
+        r => [r.wagon,r.site,r.serie,r.week,r.status,isReformPending(r)?"Oui":"Non",r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at)]
+      );
+      downloadCSV(csv, "situation_actuelle_wagons_fret.csv");
+    });
+
+    document.getElementById("exportHistorique")?.addEventListener("click", () => {
+      const rows = [...entries].sort((a,b)=>a.created_at.localeCompare(b.created_at));
+      const csv = toCSV(rows,
+        ["N° séquence","Identifiant","Wagon","Site","Série","Semaine","Situation","Motif","Étiquette mod:","Observation","Agent","Saisi le","Annulée le","Motif annulation"],
+        r => [r.seq,r.id,r.wagon,r.site,r.serie,r.week,r.status,r.motif,r.isolation,r.observation,r.visitor,fmtDateTime(r.created_at),r.cancelled_at ? fmtDateTime(r.cancelled_at) : "",r.cancelled_reason]
+      );
+      downloadCSV(csv, "historique_complet_wagons_fret.csv");
+    });
+
+    document.getElementById("exportBackup")?.addEventListener("click", () => {
+      const backup = {
+        app: "Suivi Wagons FRET",
+        format: "suivi-wagons-fret-backup",
+        version: STORAGE_VERSION,
+        exported_at: new Date().toISOString(),
+        total_entries: entries.length,
+        entries: entries
+      };
+      const ok = downloadBlob(JSON.stringify(backup, null, 2),
+        "sauvegarde_suivi_wagons_fret_"+new Date().toISOString().slice(0,10)+".json",
+        "application/json;charset=utf-8");
+      if(ok) showToast("Sauvegarde complète créée");
+    });
+
+    const importBtn = document.getElementById("importBackup");
+    const fileInput = document.getElementById("backupFile");
+    importBtn.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = "";
+      if(!file) return;
+      try{
+        const parsed = JSON.parse(await file.text());
+        const incoming = normalizeEntries(parsed.entries || parsed);
+        if(!Array.isArray(incoming) || incoming.length === 0){
+          showToast("Sauvegarde vide ou invalide");
+          return;
+        }
+        const maxSeq = entries.reduce((m,e)=>Math.max(m,Number(e.seq)||0),0);
+        const seen = new Set(entries.map(e=>e.id));
+        let added = 0;
+        for(const e of incoming){
+          if(!e.id || seen.has(e.id)) continue;
+          e.seq = Number(e.seq)||0;
+          entries.push(e);
+          seen.add(e.id);
+          added++;
+        }
+        if(added === 0){
+          showToast("Aucune nouvelle saisie à importer");
+          return;
+        }
+        // Keep sequence numbers unique after a merge.
+        const ordered = [...entries].sort((a,b)=>(Number(a.seq)||0)-(Number(b.seq)||0) || a.created_at.localeCompare(b.created_at));
+        ordered.forEach((e,i)=>e.seq=i+1);
+        const ok = await saveEntries();
+        if(ok){
+          showToast(added + " saisie(s) importée(s) — mémoire conservée");
+          render();
+        }else{
+          showToast("Échec de la sauvegarde après import");
+        }
+      }catch(err){
+        showToast("Fichier JSON invalide");
+      }
+    });
+  }
+
+  const retry = document.getElementById("retryLoad");
+  if(retry){
+    retry.addEventListener("click", async () => {
+      await loadEntries();
+      render();
+    });
+  }
+  attachV10Handlers();
+}
+
+document.getElementById("tabbar").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button[data-view]");
+  if(!btn || (btn.hasAttribute("data-controller-only") && !isController())) return;
+  state.view = btn.dataset.view;
+  render();
+});
+
+/* ---------- Init ---------- */
+(async function init(){
+  const sb=getSupabaseClient();
+  if(!sb){ renderLogin(); return; }
+  if(!await ensureSession()){ renderLogin(); return; }
+  document.getElementById("main").innerHTML = `<div class="loading-row">Connexion à la base centrale…</div>`;
+  await loadEntries();
+  subscribeRealtime();
+  render();
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{})); }
+</script>
+</body>
+</html>
