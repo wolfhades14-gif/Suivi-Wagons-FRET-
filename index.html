@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Suivi Wagons FRET">
 <meta name="theme-color" content="#2C4A63">
-<meta name="description" content="Suivi des wagons FRET ONCF sur les sites de Beni Ansar, Selouane et Hassi Blal.">
+<meta name="description" content="Suivi des wagons FRET ONCF sur les sites de Beni Ansar et Selouane.">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-512.png">
@@ -492,7 +492,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
           <div class="brand-train" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M18 8h28c7 0 11 4 11 11v23c0 5-4 9-9 9h-2l6 7h-7l-5-7H24l-5 7h-7l6-7h-2c-5 0-9-4-9-9V19C7 12 11 8 18 8Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M15 25h34M17 17h30M18 43h7m14 0h7" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="20" cy="48" r="3" fill="currentColor"/><circle cx="44" cy="48" r="3" fill="currentColor"/></svg></div>
           <div>
             <h1>Suivi Wagons FRET</h1>
-            <p>Beni Ansar, Selouane et Hassi Blal</p>
+            <p>Beni Ansar et Selouane</p>
           </div>
         </div>
         <div id="currentUserChip" class="header-role"></div>
@@ -545,7 +545,7 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
 <script src="./supabase-config.js"></script>
 <script>
 /* ---------- Reference data ---------- */
-const SITES = ["Beni Ansar (Gare)","Beni Ansar (Port)","Selouane","Hassi Blal"];
+const SITES = ["Beni Ansar","Selouane"];
 const SERIES = ["Tads","Fads","Uads","Fads SCIF","Fads Barytine","Autre"];
 // Auto-fill mapping from the first 4 digits of a wagon number to its série,
 // per the ONCF Parc du Matériel (Annexe 1, Contrat PFL-PMM N° 12/2021).
@@ -592,6 +592,7 @@ const LOCAL_BACKUP_KEY = "wagons-fret-history-backup-v23";
 let supabaseClient = null;
 let realtimeChannel = null;
 let userProfiles = [];
+let currentAuthorizations = [];
 
 function getSupabaseClient(){
   if(supabaseClient) return supabaseClient;
@@ -619,6 +620,60 @@ async function loadUserProfile(user){
   }catch(err){
     console.warn("Profil utilisateur indisponible:",err?.message||err);
     return null;
+  }
+}
+async function loadCurrentAuthorizations(){
+  const sb=getSupabaseClient();
+  if(!sb || !currentUser){ currentAuthorizations=[]; return; }
+  try{
+    const q=sb.from("autorisations_deplacement").select("id,user_id,site_autorise,date_debut,date_fin,motif,accorde_par,actif,created_at").order("date_debut",{ascending:false});
+    const {data,error}=isController() ? await q : await q.eq("user_id",currentUser.id);
+    if(error) throw error;
+    currentAuthorizations=Array.isArray(data)?data:[];
+  }catch(err){
+    console.warn("Autorisations de déplacement indisponibles:",err?.message||err);
+    currentAuthorizations=[];
+  }
+}
+function isSiteTemporarilyAuthorized(site){
+  if(isController()) return true;
+  const today=new Date().toISOString().slice(0,10);
+  return currentAuthorizations.some(a=>a.actif!==false && a.site_autorise===site && today>=a.date_debut && today<=a.date_fin);
+}
+async function createAuthorization(payload){
+  const sb=getSupabaseClient();
+  if(!sb || !isController()) return false;
+  try{
+    const {error}=await sb.from("autorisations_deplacement").insert({
+      user_id:payload.user_id,
+      site_autorise:payload.site_autorise,
+      date_debut:payload.date_debut,
+      date_fin:payload.date_fin,
+      motif:String(payload.motif||"").trim()||null,
+      accorde_par:currentUser.id,
+      actif:true
+    });
+    if(error) throw error;
+    await loadCurrentAuthorizations();
+    return true;
+  }catch(err){
+    console.error(err);
+    showToast("Création de l'autorisation impossible : "+(err?.message||"erreur"));
+    return false;
+  }
+}
+async function deactivateAuthorization(id){
+  const sb=getSupabaseClient();
+  if(!sb || !isController() || !id) return false;
+  try{
+    const {error}=await sb.from("autorisations_deplacement").update({actif:false}).eq("id",id);
+    if(error) throw error;
+    await loadCurrentAuthorizations();
+    return true;
+  }catch(err){
+    console.error(err);
+    showToast("Désactivation impossible : "+(err?.message||"erreur"));
+    return false;
   }
 }
 async function loadUserProfiles(){
@@ -657,7 +712,7 @@ async function buildCurrentUser(user){
   const meta=user?.user_metadata||{};
   const profile=await loadUserProfile(user);
   const role=roleFromUser(user,profile);
-  const allowedSites=["Beni Ansar (Gare)","Beni Ansar (Port)","Selouane","Hassi Blal"];
+  const allowedSites=["Beni Ansar","Selouane"];
   const site=role==="controller" ? "Tous" : (allowedSites.includes(String(profile?.site||"")) ? String(profile.site) : "Tous");
   return {
     id:user.id,
@@ -684,6 +739,7 @@ async function ensureSession(){
     return false;
   }
   if(isController()) await loadUserProfiles();
+  await loadCurrentAuthorizations();
   return true;
 }
 async function clearSession(){
@@ -787,11 +843,12 @@ async function loadEntries(){
     console.error(e); storageOk=false; entries=[]; return false;
   }
 }
-async function saveEntries(){
+async function saveEntries(changedEntries=null){
   const sb=getSupabaseClient();
   if(!sb || !currentUser){storageOk=false;return false;}
   try{
-    const rows=entries.map(entryToRow);
+    const source=Array.isArray(changedEntries) ? changedEntries : entries;
+    const rows=source.filter(Boolean).map(entryToRow);
     if(rows.length){
       const {error}=await sb.from("wagons").upsert(rows,{onConflict:"entry_uid"});
       if(error) throw error;
@@ -1145,7 +1202,7 @@ function viewSaisie(){
         <select name="site" required>
           <option value="">Choisir un site</option>
           ${SITES.map(site => {
-            const allowed = isController() || site===currentUser.site || editReformed;
+            const allowed = isController() || site===currentUser.site || isSiteTemporarilyAuthorized(site) || (editReformed && SITES.includes(site));
             return allowed ? `<option value="${esc(site)}" ${site===selectedSite?'selected':''}>${esc(site)}</option>` : "";
           }).join("")}
         </select>
@@ -1305,12 +1362,30 @@ function viewUsers(){
   </div>
   <div class="card"><h2 class="section-title">Profils et affectations</h2><div class="user-list">${profilesHtml}</div></div>
   <div class="card"><h2 class="section-title">Règles du pilote</h2><ul class="security-list">
-    <li>Les visiteurs consultent tous les sites.</li>
+    <li>Les visiteurs consultent tous les wagons.
+    <li>Le périmètre permanent est Beni Ansar (Gare + Port) ou Selouane.</li></li>
     <li>Un visiteur saisit normalement sur son site affecté.</li>
-    <li>Un wagon en réforme peut être modifié par un visiteur depuis n'importe quel site pour permettre son transfert vers réparation.</li>
+    <li>Un wagon non exploitable (En réparation, En attente ou Réformé) peut être repris lors d'un transfert vers l'autre périmètre.</li>
+    <li>Un déplacement temporaire est accordé par le Contrôleur avec une période de validité.</li>
     <li>Le Contrôleur matériel conserve les droits globaux.</li>
     <li>Chaque nouvelle modification est ajoutée à l'historique sans écraser les saisies précédentes.</li>
-  </ul></div>`;
+  </ul></div>
+  <div class="card">
+    <h2 class="section-title">Autorisations temporaires de déplacement</h2>
+    <p class="help-text">Le Contrôleur matériel peut autoriser temporairement un visiteur à travailler sur l'autre périmètre. L'autorisation ne modifie pas son affectation permanente.</p>
+    <form id="authorizationForm" class="report-grid">
+      <label>Visiteur<select id="authorizationUser" required>${userProfiles.filter(p=>p.role!=="controller" && p.actif!==false).map(p=>`<option value="${esc(p.id)}">${esc(p.nom||p.email)} — ${esc(p.site)}</option>`).join("")}</select></label>
+      <label>Site autorisé<select id="authorizationSite" required>${SITES.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></label>
+      <label>Du<input type="date" id="authorizationStart" required></label>
+      <label>Au<input type="date" id="authorizationEnd" required></label>
+      <label style="grid-column:1/-1">Motif<input type="text" id="authorizationReason" placeholder="Renfort, remplacement, séance de visite…"></label>
+      <button class="btn" type="submit">Créer l'autorisation</button>
+    </form>
+    <div style="margin-top:14px">${currentAuthorizations.map(a=>{
+      const p=userProfiles.find(x=>x.id===a.user_id);
+      return `<div class="user-item"><div class="top"><strong>${esc(p?.nom||p?.email||a.user_id)}</strong><span class="role-pill">${a.actif!==false?"Active":"Inactive"}</span></div><small>${esc(a.site_autorise)} · ${esc(a.date_debut)} → ${esc(a.date_fin)}${a.motif?" · "+esc(a.motif):""}</small>${a.actif!==false?`<button class="btn secondary" type="button" data-deactivate-auth="${esc(a.id)}">Désactiver</button>`:""}</div>`;
+    }).join("") || `<div class="attention-empty">Aucune autorisation enregistrée.</div>`}</div>
+  </div>`;
 }
 function viewExport(){
   if(!isController()) return `<div class="empty"><div class="big">🔒</div><p>Accès réservé au Contrôleur matériel.</p></div>`;
@@ -1624,7 +1699,7 @@ function openHistory(wagon){
       if(!target || target.cancelled_at) return;
       target.cancelled_at = new Date().toISOString();
       target.cancelled_reason = reason.trim();
-      const ok = await saveEntries();
+      const ok = await saveEntries([target]);
       if(ok){ showToast("Saisie annulée, historique conservé"); }
       else { target.cancelled_at = null; target.cancelled_reason = ""; showToast("Échec de l'enregistrement"); }
       openHistory(wagon);
@@ -1778,14 +1853,14 @@ function attachViewHandlers(){
         };
         const editingWagon = state.prefillWagon || entry.wagon;
         const canEditReformed = editingWagon ? reformStateForWagon(editingWagon).reformed : false;
-        if(isVisitor() && !canEditReformed && entry.site !== currentUser.site){
-          showToast("Vous ne pouvez saisir que sur votre site affecté.");
+        if(isVisitor() && !canEditReformed && entry.site !== currentUser.site && !isSiteTemporarilyAuthorized(entry.site)){
+          showToast("Ce site n'est pas autorisé pour votre profil aujourd'hui.");
           return;
         }
         const validationErrors=validateEntryData(entry);
         if(validationErrors.length){ showToast(validationErrors[0]); return; }
         entries.push(entry);
-        const ok = await saveEntries();
+        const ok = await saveEntries([entry]);
         if(!ok){ entries.pop(); showToast("Enregistrement impossible : connexion à la base centrale indisponible"); return; }
         showToast("Saisie enregistrée");
         state.view = "situation";
@@ -1857,6 +1932,24 @@ function attachViewHandlers(){
         }
       });
     });
+    document.getElementById("authorizationForm")?.addEventListener("submit", async (ev)=>{
+      ev.preventDefault();
+      const start=document.getElementById("authorizationStart")?.value||"";
+      const end=document.getElementById("authorizationEnd")?.value||"";
+      if(!start || !end || end<start){ showToast("Vérifie la période d'autorisation."); return; }
+      const ok=await createAuthorization({
+        user_id:document.getElementById("authorizationUser")?.value,
+        site_autorise:document.getElementById("authorizationSite")?.value,
+        date_debut:start, date_fin:end,
+        motif:document.getElementById("authorizationReason")?.value||""
+      });
+      if(ok){ showToast("Autorisation temporaire créée"); render(); }
+    });
+    document.querySelectorAll("[data-deactivate-auth]").forEach(btn=>btn.addEventListener("click",async()=>{
+      if(!confirm("Désactiver cette autorisation ?")) return;
+      const ok=await deactivateAuthorization(btn.dataset.deactivateAuth);
+      if(ok){ showToast("Autorisation désactivée"); render(); }
+    }));
   }
 
   if(state.view === "export" && isController()){
@@ -1919,10 +2012,12 @@ function attachViewHandlers(){
         const maxSeq = entries.reduce((m,e)=>Math.max(m,Number(e.seq)||0),0);
         const seen = new Set(entries.map(e=>e.id));
         let added = 0;
+        const addedEntries = [];
         for(const e of incoming){
           if(!e.id || seen.has(e.id)) continue;
           e.seq = Number(e.seq)||0;
           entries.push(e);
+          addedEntries.push(e);
           seen.add(e.id);
           added++;
         }
@@ -1933,7 +2028,7 @@ function attachViewHandlers(){
         // Keep sequence numbers unique after a merge.
         const ordered = [...entries].sort((a,b)=>(Number(a.seq)||0)-(Number(b.seq)||0) || a.created_at.localeCompare(b.created_at));
         ordered.forEach((e,i)=>e.seq=i+1);
-        const ok = await saveEntries();
+        const ok = await saveEntries(addedEntries);
         if(ok){
           showToast(added + " saisie(s) importée(s) — mémoire conservée");
           render();
