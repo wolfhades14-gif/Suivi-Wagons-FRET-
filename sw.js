@@ -1,7 +1,8 @@
 /* Suivi Wagons FRET — TMN
    Service Worker V25.1
+   But : forcer la récupération de la nouvelle interface + icônes
+   sans mettre en cache les données Supabase.
 */
-
 const CACHE_NAME = "suivi-wagons-fret-tmn-v25-1";
 
 const APP_SHELL = [
@@ -14,7 +15,6 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
-
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       cache.addAll(APP_SHELL).catch(() => {})
@@ -38,39 +38,31 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  if (url.origin !== self.location.origin) {
-    return;
-  }
+  // Supabase et autres requêtes externes : toujours réseau.
+  if (url.origin !== self.location.origin) return;
 
+  // Navigation : réseau d'abord pour récupérer immédiatement la nouvelle V25.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
           const copy = response.clone();
-
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put("./index.html", copy);
-          });
-
+          caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", copy));
           return response;
         })
         .catch(() => caches.match("./index.html"))
     );
-
     return;
   }
 
+  // Fichiers statiques de l'application : réseau d'abord, cache en secours.
   event.respondWith(
     fetch(request)
       .then((response) => {
         if (response.ok) {
           const copy = response.clone();
-
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, copy);
-          });
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
-
         return response;
       })
       .catch(() => caches.match(request))

@@ -1,6 +1,7 @@
 {
+  "id": "./",
   "name": "Suivi Wagons FRET - TMN",
-  "short_name": "Suivi Wagons FRET",
+  "short_name": "Wagons TMN",
   "description": "Suivi opérationnel des wagons FRET - TMN Technicentre de Nador",
   "start_url": "./",
   "scope": "./",
@@ -13,13 +14,13 @@
       "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
