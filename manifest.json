@@ -1,28 +1,25 @@
 {
-  "name": "Suivi Wagons FRET",
-  "short_name": "Wagons FRET",
-  "start_url": "./index.html?v=22",
+  "name": "Suivi Wagons FRET - TMN",
+  "short_name": "Suivi Wagons FRET",
+  "description": "Suivi opérationnel des wagons FRET - TMN Technicentre de Nador",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#EEF3F7",
-  "theme_color": "#15557D",
-  "description": "Suivi opérationnel du matériel remorqué FRET - V22",
+  "orientation": "portrait",
+  "background_color": "#062B57",
+  "theme_color": "#062B57",
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "icon-512-maskable.png",
-      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }
