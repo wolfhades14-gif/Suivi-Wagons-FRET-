@@ -546,16 +546,34 @@ header.top .header-user-row,header.top .chips-row{position:relative;z-index:1}
 <script>
 /* ---------- Reference data ---------- */
 const SITES = ["Beni Ansar","Selouane"];
-const SERIES = ["Tads","Fads","Uads","Fads SCIF","Fads Barytine","Autre"];
+const BENI_ANSAR_POINTS = ["Gare","Port"];
+function siteDisplayLabel(site, point){
+  return site === "Beni Ansar" && point ? `Beni Ansar (${point})` : site;
+}
+const SERIES = ["Tads","Fads","Uads","Fads SCIF","Fads Barytine","Plat","Tombereau","Citerne","Autre"];
 // Auto-fill mapping from the first 4 digits of a wagon number to its série,
 // per the ONCF Parc du Matériel (Annexe 1, Contrat PFL-PMM N° 12/2021).
 const SERIE_BY_PREFIX = {
-  "5838": "Tads", "5839": "Tads",             // Tads charbon/barytine
-  "6970": "Fads", "6971": "Fads",             // Fads charbon
-  "6960": "Fads Barytine",                    // Fadsf barytine
-  "9310": "Fads SCIF",                        // Fads charbon SCIF (93105)
-  "9313": "Uads", "9314": "Uads", "9315": "Uads",   // Uads charbon/calcaire
-  "9325": "Uads", "9326": "Uads", "9328": "Uads", "9329": "Uads" // Uads charbon
+  // Trémies déjà utilisées au TMN
+  "5838": "Tads", "5839": "Tads",
+  "6970": "Fads", "6971": "Fads",
+  "6960": "Fads Barytine",
+  "9310": "Fads SCIF",
+  "9313": "Uads", "9314": "Uads", "9315": "Uads",
+  "9325": "Uads", "9326": "Uads", "9328": "Uads", "9329": "Uads",
+
+  // Plats — préfixes relevés dans le support ONCF Technologie Fret 2020
+  "3900": "Plat", "3901": "Plat", "3919": "Plat", "3920": "Plat",
+  "3936": "Plat", "3937": "Plat", "4527": "Plat", "4850": "Plat",
+
+  // Tombereaux — Eas / Easf E60
+  "5952": "Tombereau", "5953": "Tombereau",
+
+  // Citernes — Zasf / Uahsf / Uacesf
+  "7850": "Citerne", "7851": "Citerne", "7853": "Citerne", "7854": "Citerne",
+  "7296": "Citerne", "7297": "Citerne", "9321": "Citerne",
+  // anciens numéros cités dans le support ONCF
+  "0752": "Citerne", "0753": "Citerne"
 };
 function serieFromWagon(wagon){
   if(!wagon || wagon.length < 4) return null;
@@ -569,7 +587,29 @@ const STATUS_COLOR = {
   "En attente":   { c: "var(--primary)",bg:"var(--primary-bg)" },
   "Réformé":      { c: "#6B4F8A",      bg:"#EEE7F5" }
 };
-const MOTIFS = ["Aucune","VG","RA","RLCB","RLB","ILD","PDR","Frein","Caisse","Trappe","Autre"];
+const MOTIFS = [
+  "Aucune",
+  "VG",
+  "RL",
+  "Frein",
+  "Essieux montés",
+  "Boîtes d’essieux",
+  "Châssis",
+  "Suspension",
+  "Ressorts",
+  "Appareils de traction",
+  "Appareils de choc",
+  "Caisse",
+  "Trappes",
+  "Toiture",
+  "Portes / Serrures",
+  "Fenêtres",
+  "Réservoir",
+  "Chauffage",
+  "Électricité",
+  "Intercirculation",
+  "Autre"
+];
 function motifValues(entryOrValue){
   const raw=typeof entryOrValue === "string" ? entryOrValue : (entryOrValue?.motif || "Aucune");
   const values=String(raw).split(/\s*\+\s*/).map(x=>x.trim()).filter(Boolean);
@@ -587,7 +627,7 @@ let storageOk = true;
 let lastSavedAt = null;
 let currentUser = null;
 let state = { view: "dashboard", filterSite: "Tous", search: "", historyWagon: null, dashboardSite: "Tous", dashboardStatus: "Tous", prefillWagon: null, prefillEntryId: null };
-const STORAGE_VERSION = 23;
+const STORAGE_VERSION = 25;
 const LOCAL_BACKUP_KEY = "wagons-fret-history-backup-v23";
 let supabaseClient = null;
 let realtimeChannel = null;
@@ -797,6 +837,7 @@ function rowToEntry(r,i){
     record_version:Number(r.record_version)||1,
     week:r.week || "",
     site:r.site || "",
+    point_visite:r.point_visite || "",
     wagon:r.numero_wagon || "",
     serie:r.serie || SERIES[0],
     status:r.situation || "Disponible",
@@ -817,6 +858,7 @@ function entryToRow(e){
     week:e.week||"",
     numero_wagon:e.wagon,
     site:e.site,
+    point_visite:e.point_visite || null,
     serie:e.serie||SERIES[0],
     situation:e.status,
     motif:e.motif||"Aucune",
@@ -1203,9 +1245,15 @@ function viewSaisie(){
           <option value="">Choisir un site</option>
           ${SITES.map(site => {
             const allowed = isController() || site===currentUser.site || isSiteTemporarilyAuthorized(site) || (editReformed && SITES.includes(site));
-            return allowed ? `<option value="${esc(site)}" ${site===selectedSite?'selected':''}>${esc(site)}</option>` : "";
+            if(!allowed) return "";
+            if(site === "Beni Ansar" && isVisitor() && currentUser.site === "Beni Ansar" && !isSiteTemporarilyAuthorized("Selouane")){
+              return BENI_ANSAR_POINTS.map(point => `<option value="Beni Ansar" data-point="${esc(point)}" ${selectedSite==='Beni Ansar' && (prefill?.point_visite || "Gare")===point?'selected':''}>Beni Ansar (${esc(point)})</option>`).join("");
+            }
+            return `<option value="${esc(site)}" ${site===selectedSite?'selected':''}>${esc(site)}</option>`;
           }).join("")}
         </select>
+        <input type="hidden" name="point_visite" value="${esc(prefill?.point_visite || (currentUser?.site === 'Beni Ansar' ? 'Gare' : ''))}">
+        <div class="help-text">À Beni Ansar, le visiteur peut travailler à la <strong>Gare</strong> ou au <strong>Port</strong>. Le site enregistré reste « Beni Ansar » pour respecter le périmètre Supabase ; le point Gare/Port est conservé séparément.</div>
 
         <label>Numéro de wagon</label>
         <input type="tel" name="wagon" inputmode="numeric" maxlength="7" placeholder="7 chiffres" value="${esc(prefill?.wagon || state.prefillWagon || "")}" required>
@@ -1221,6 +1269,11 @@ function viewSaisie(){
           ${STATUSES.map(status => `<option value="${esc(status)}" ${status===(prefill?.status || "Disponible")?'selected':''}>${esc(status)}</option>`).join("")}
         </select>
 
+        <label>Étiquette mod:</label>
+        <select name="isolation">
+          ${ISOLATION_CODES.map(code => `<option value="${esc(code)}" ${code===(prefill?.isolation || "Aucun")?'selected':''}>${esc(code)}</option>`).join("")}
+        </select>
+
         <label>Motif(s) / anomalie(s)</label>
         <details class="motif-dropdown">
           <summary><span id="motifSummary">Choisir un ou plusieurs motifs</span></summary>
@@ -1230,11 +1283,6 @@ function viewSaisie(){
         </details>
         <label class="motif-none"><input type="checkbox" name="motifAucune" value="Aucune" ${(!prefill?.motif || prefill?.motif==="Aucune" || motifValues(prefill?.motif).includes("Aucune"))?'checked':''}> <span>Aucune anomalie renseignée</span></label>
         <p class="help-text motif-help">Ouvre la liste avec la flèche. Plusieurs choix sont possibles (ex. Frein + Caisse).</p>
-
-        <label>Étiquette mod:</label>
-        <select name="isolation">
-          ${ISOLATION_CODES.map(code => `<option value="${esc(code)}" ${code===(prefill?.isolation || "Aucun")?'selected':''}>${esc(code)}</option>`).join("")}
-        </select>
 
         <label>Observation</label>
         <textarea name="observation" placeholder="Remarque, levée officielle, acheminement...">${esc(prefill?.observation || "")}</textarea>
@@ -1786,6 +1834,16 @@ function attachViewHandlers(){
     const serieSelect = form.querySelector('select[name="serie"]');
     const statusSelect = form.querySelector('select[name="status"]');
     const isolationSelect = form.querySelector('select[name="isolation"]');
+    const siteSelect = form.querySelector('select[name="site"]');
+    const pointInput = form.querySelector('input[name="point_visite"]');
+    function syncBeniPoint(){
+      if(!siteSelect || !pointInput) return;
+      const opt = siteSelect.options[siteSelect.selectedIndex];
+      const point = opt?.dataset?.point || (siteSelect.value === "Beni Ansar" ? (pointInput.value || "Gare") : "");
+      pointInput.value = point;
+    }
+    siteSelect?.addEventListener("change", syncBeniPoint);
+    syncBeniPoint();
     // Règle métier : un wagon déclaré Disponible ne porte plus d’étiquette de modification.
     function syncIsolationWithStatus(){
       if(statusSelect?.value === "Disponible" && isolationSelect){
@@ -1842,6 +1900,7 @@ function attachViewHandlers(){
           record_version: 1,
           week: String(fd.get("week") || isoWeekDefault()).trim(),
           site: String(fd.get("site") || ""),
+          point_visite: String(fd.get("point_visite") || ""),
           wagon,
           serie: String(fd.get("serie") || SERIES[0]),
           status: String(fd.get("status") || "Disponible"),
